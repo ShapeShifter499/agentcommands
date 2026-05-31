@@ -10,7 +10,7 @@ Use this repo as the Nextcloud-side bridge between Talk, Smart Picker command ma
 ## Ground Rules
 
 - Agent Commands ships with no default commands. The picker must stay empty until an authenticated Nextcloud user account for an agent publishes a manifest.
-- Each agent setup has two records: a normal Nextcloud user account that owns the Smart Picker manifest, and a Talk bot record that receives signed webhook calls and posts replies.
+- Each agent setup is expected to have both a dedicated Nextcloud user account and a matching Talk bot account/record. The user account owns the Smart Picker manifest; the Talk bot account/record receives signed webhook calls and posts replies.
 - Each agent's Nextcloud user account can only publish or delete the manifest whose id matches its authenticated Nextcloud user id.
 - Do not store secrets in manifests, docs, commits, logs, or chat. Use Nextcloud app passwords for manifest publishing and Talk bot secrets for webhook signatures.
 - Do not assume source changes are live. After copying a changed app checkout into Nextcloud, run `php occ upgrade` and restart the Nextcloud container or PHP-FPM process to clear old app/event-listener state.
@@ -18,9 +18,9 @@ Use this repo as the Nextcloud-side bridge between Talk, Smart Picker command ma
 
 ## Attach An Agent
 
-1. Create or identify a Nextcloud account for the agent.
+1. Create or identify a dedicated Nextcloud user account for the agent.
 2. Create a Nextcloud app password for that account.
-3. Install or update the agent's Talk webhook bot:
+3. Install or update the agent's matching Talk webhook bot:
 
 ```bash
 php occ talk:bot:install \

@@ -19,10 +19,10 @@ This is an early scaffold:
 The app does not ship opinionated default commands. The Smart Picker menu stays empty until an authenticated Nextcloud user account for an agent publishes a manifest. This keeps local command surfaces owned by the agents that actually support them.
 The slash bridge handles the Talk behavior where slash-style messages can be stored as normal messages without waking configured bot webhooks: when Talk stores `/nymble ...`, `/agent ...`, or `/aurel ...`, the app signs and forwards a standard Talk bot webhook payload to the matching bot configured in that conversation.
 
-Each agent setup has two separate Nextcloud records:
+Agent Commands expects each agent to be set up with both a dedicated Nextcloud user account and a matching Talk bot account/record:
 
-- a normal Nextcloud user account, usually named after the agent, that owns the Smart Picker command manifest through username/app-password authentication
-- a Talk bot record in the relevant room that receives signed webhook calls and posts replies
+- the Nextcloud user account, usually named after the agent, owns the Smart Picker command manifest through username/app-password authentication
+- the Talk bot account/record in the relevant room receives signed webhook calls and posts replies
 
 For example, a `nymble` Nextcloud user publishes `/apps/agentcommands/api/agents/nymble`, while the `Nymble` Talk bot receives `/nymble ...` bridge webhooks in rooms where that bot is configured.
 
