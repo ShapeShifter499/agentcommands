@@ -33,8 +33,8 @@ class TalkSlashCommandBridgeListener implements IEventListener {
 
 	#[\Override]
 	public function handle(Event $event): void {
-		if (!class_exists(\OCA\Talk\Events\ChatMessageSentEvent::class)
-			|| !$event instanceof \OCA\Talk\Events\ChatMessageSentEvent) {
+		if (!class_exists(\OCA\Talk\Events\AMessageSentEvent::class)
+			|| !$event instanceof \OCA\Talk\Events\AMessageSentEvent) {
 			return;
 		}
 
@@ -61,7 +61,7 @@ class TalkSlashCommandBridgeListener implements IEventListener {
 
 		$target = strtolower($matches['target']);
 		$room = $event->getRoom();
-		$this->logger->info('Agent Commands slash bridge matched Talk command', [
+		$this->logger->warning('Agent Commands slash bridge matched Talk command', [
 			'app' => Application::APP_ID,
 			'target' => $target,
 			'roomToken' => $room->getToken(),
@@ -175,7 +175,7 @@ class TalkSlashCommandBridgeListener implements IEventListener {
 		]);
 
 		$promise->then(function (): void {
-			$this->logger->info('Agent Commands slash bridge invoked Talk bot webhook', [
+			$this->logger->warning('Agent Commands slash bridge invoked Talk bot webhook', [
 				'app' => Application::APP_ID,
 			]);
 		}, function (\Throwable $error) use ($bot): void {
