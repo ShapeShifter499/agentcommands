@@ -63,10 +63,7 @@ class AgentCommandsPicker extends HTMLElement {
     this.dispatchEvent(new CustomEvent('submit', {
       bubbles: true,
       composed: true,
-      detail: {
-        type: 'text',
-        value: commandText,
-      },
+      detail: commandText,
     }))
   }
 }
