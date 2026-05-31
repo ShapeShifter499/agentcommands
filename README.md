@@ -35,6 +35,21 @@ php occ talk:bot:setup <agent-commands-bot-id> <room-token>
 
 When the event bot receives `/nymble ...`, `/agent ...`, or `/aurel ...`, Agent Commands looks for the matching webhook bot in that room and forwards the normal signed Talk bot payload to that bot's webhook URL.
 
+### Talk bot administration notes
+
+Configured webhook bots should usually enable all features that OpenClaw may use:
+
+```bash
+php occ talk:bot:state <bot-id> 1 \
+  --feature webhook \
+  --feature response \
+  --feature reaction
+```
+
+Use `talk:bot:state` when only the enabled state or feature list needs to change. It avoids uninstalling and reinstalling a working bot registration.
+
+After replacing the installed app checkout in a running Nextcloud container, run `php occ upgrade` and restart the Nextcloud container or PHP-FPM process before testing Talk events. Nextcloud can otherwise keep an old event-listener registration loaded through PHP/opcache even when the files and installed app version are already updated.
+
 ## Development
 
 ```bash
