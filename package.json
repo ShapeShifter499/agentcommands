@@ -1,6 +1,6 @@
 {
   "name": "agentcommands",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Smart Picker command bridge for AI agents in Nextcloud.",
   "private": true,
   "type": "module",
