@@ -80,7 +80,7 @@ class TalkBotInvokeListener implements IEventListener {
 			return;
 		}
 
-		$this->sendWebhook($bot, json_encode($body, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES));
+		$this->sendWebhook($bot['name'], $bot['url'], $bot['secret'], json_encode($body, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES));
 	}
 
 	/**
@@ -126,16 +126,13 @@ class TalkBotInvokeListener implements IEventListener {
 		return $normalized === $target || $firstWord === $target;
 	}
 
-	/**
-	 * @param array{name: string, url: string, secret: string} $bot
-	 */
-	private function sendWebhook(array $bot, string $body): void {
+	private function sendWebhook(string $botName, string $botUrl, string $botSecret, string $body): void {
 		$random = $this->secureRandom->generate(64);
-		$signature = hash_hmac('sha256', $random . $body, $bot['secret']);
+		$signature = hash_hmac('sha256', $random . $body, $botSecret);
 		$backend = rtrim($this->config->getSystemValueString('overwrite.cli.url'), '/') . '/';
 
 		$client = $this->clientService->newClient();
-		$promise = $client->postAsync($bot['url'], [
+		$promise = $client->postAsync($botUrl, [
 			'verify' => $this->certificateManager->getAbsoluteBundlePath(),
 			'nextcloud' => [
 				'allow_local_address' => true,
@@ -151,14 +148,18 @@ class TalkBotInvokeListener implements IEventListener {
 			'body' => $body,
 		]);
 
-		$promise->then(function (): void {
+		$promise->then(function () use ($botName): void {
 			$this->logger->warning('Agent Commands event bot bridge invoked Talk bot webhook', [
 				'app' => Application::APP_ID,
+				'botName' => $botName,
 			]);
-		}, function (\Throwable $error) use ($bot): void {
-			$this->logger->warning('Agent Commands event bot bridge failed to invoke Talk bot ' . $bot['name'], [
+		}, function (\Throwable $error) use ($botName): void {
+			$this->logger->warning('Agent Commands event bot bridge failed to invoke Talk bot ' . $botName, [
 				'app' => Application::APP_ID,
-				'exception' => $error,
+				'botName' => $botName,
+				'exceptionClass' => $error::class,
+				'exceptionCode' => $error->getCode(),
+				'exceptionMessage' => $error->getMessage(),
 			]);
 		});
 	}

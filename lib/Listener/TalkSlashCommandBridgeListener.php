@@ -105,7 +105,7 @@ class TalkSlashCommandBridgeListener implements IEventListener {
 			],
 		], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
 
-		$this->sendWebhook($bot, $body);
+		$this->sendWebhook($bot['name'], $bot['url'], $bot['secret'], $body);
 	}
 
 	/**
@@ -151,12 +151,9 @@ class TalkSlashCommandBridgeListener implements IEventListener {
 		return $normalized === $target || $firstWord === $target;
 	}
 
-	/**
-	 * @param array{name: string, url: string, secret: string} $bot
-	 */
-	private function sendWebhook(array $bot, string $body): void {
+	private function sendWebhook(string $botName, string $botUrl, string $botSecret, string $body): void {
 		$random = $this->secureRandom->generate(64);
-		$signature = hash_hmac('sha256', $random . $body, $bot['secret']);
+		$signature = hash_hmac('sha256', $random . $body, $botSecret);
 		$backend = rtrim($this->config->getSystemValueString('overwrite.cli.url'), '/') . '/';
 
 		$client = $this->clientService->newClient();
@@ -178,22 +175,25 @@ class TalkSlashCommandBridgeListener implements IEventListener {
 
 		$this->logger->warning('Agent Commands slash bridge posting Talk bot webhook', [
 			'app' => Application::APP_ID,
-			'botName' => $bot['name'],
+			'botName' => $botName,
 			'headerStyle' => 'X-Nextcloud-Talk',
 			'payload' => $body,
 		]);
 
 		try {
-			$response = $client->post($bot['url'], $options);
+			$response = $client->post($botUrl, $options);
 			$this->logger->warning('Agent Commands slash bridge invoked Talk bot webhook', [
 				'app' => Application::APP_ID,
-				'botName' => $bot['name'],
+				'botName' => $botName,
 				'statusCode' => $response->getStatusCode(),
 			]);
 		} catch (\Throwable $error) {
-			$this->logger->warning('Agent Commands slash bridge failed to invoke Talk bot ' . $bot['name'], [
+			$this->logger->warning('Agent Commands slash bridge failed to invoke Talk bot ' . $botName, [
 				'app' => Application::APP_ID,
-				'exception' => $error,
+				'botName' => $botName,
+				'exceptionClass' => $error::class,
+				'exceptionCode' => $error->getCode(),
+				'exceptionMessage' => $error->getMessage(),
 			]);
 		}
 	}
