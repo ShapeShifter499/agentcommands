@@ -46,6 +46,11 @@ class ManifestController extends Controller {
 			return $this->error('Agent id must contain only letters, numbers, underscores, and hyphens.', Http::STATUS_BAD_REQUEST);
 		}
 
+		$userId = $user->getUID();
+		if ($agentId !== $userId) {
+			return $this->error('Agent id must match the authenticated user id.', Http::STATUS_FORBIDDEN);
+		}
+
 		$params = $this->request->getParams();
 		$name = trim((string)($params['name'] ?? $agentId));
 		$commands = $params['commands'] ?? null;
@@ -56,7 +61,7 @@ class ManifestController extends Controller {
 		$manifest = [
 			'id' => $agentId,
 			'name' => $name !== '' ? $name : $agentId,
-			'owner' => $user->getUID(),
+			'owner' => $userId,
 			'updatedAt' => time(),
 			'commands' => $this->normalizeCommands($commands),
 		];
@@ -64,7 +69,7 @@ class ManifestController extends Controller {
 			return $this->error('Manifest must include at least one valid command.', Http::STATUS_BAD_REQUEST);
 		}
 
-		$key = $this->manifestKey($user->getUID(), $agentId);
+		$key = $this->manifestKey($userId, $agentId);
 		$this->config->setAppValue(Application::APP_ID, $key, json_encode($manifest, JSON_THROW_ON_ERROR));
 
 		return new JSONResponse(['agent' => $manifest], Http::STATUS_CREATED);
@@ -84,7 +89,12 @@ class ManifestController extends Controller {
 			return $this->error('Agent id must contain only letters, numbers, underscores, and hyphens.', Http::STATUS_BAD_REQUEST);
 		}
 
-		$this->config->deleteAppValue(Application::APP_ID, $this->manifestKey($user->getUID(), $agentId));
+		$userId = $user->getUID();
+		if ($agentId !== $userId) {
+			return $this->error('Agent id must match the authenticated user id.', Http::STATUS_FORBIDDEN);
+		}
+
+		$this->config->deleteAppValue(Application::APP_ID, $this->manifestKey($userId, $agentId));
 
 		return new JSONResponse(['deleted' => true]);
 	}

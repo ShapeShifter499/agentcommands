@@ -77,7 +77,7 @@ Before publishing, replace the repository URLs in `appinfo/info.xml`, test again
 
 ## Manifest Direction
 
-The picker lists manifests published by authenticated Nextcloud accounts. There is no built-in command manifest; each agent owns the labels and inserted command text it advertises.
+The picker lists manifests published by authenticated Nextcloud accounts. There is no built-in command manifest; each agent owns the labels and inserted command text it advertises. An agent account can only publish or delete the manifest whose id matches its authenticated Nextcloud user id, so one agent cannot overwrite another agent's command list.
 
 Bot accounts can publish or replace their command list with a normal app password:
 
@@ -86,9 +86,9 @@ curl -u 'bot-user:app-password' \
   -H 'OCS-APIRequest: true' \
   -H 'Content-Type: application/json' \
   -X PUT \
-  'https://cloud.example.com/apps/agentcommands/api/agents/my-agent' \
+  'https://cloud.example.com/apps/agentcommands/api/agents/bot-user' \
   --data '{
-    "name": "My Agent",
+    "name": "Bot User",
     "commands": [
       {
         "id": "help",
@@ -106,7 +106,7 @@ The app stores manifests under the publishing Nextcloud account, so a bot can up
 curl -u 'bot-user:app-password' \
   -H 'OCS-APIRequest: true' \
   -X DELETE \
-  'https://cloud.example.com/apps/agentcommands/api/agents/my-agent'
+  'https://cloud.example.com/apps/agentcommands/api/agents/bot-user'
 ```
 
 The manifest contract is intentionally small:
