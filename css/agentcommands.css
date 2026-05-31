@@ -1,0 +1,48 @@
+.agentcommands-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 260px;
+  max-width: 420px;
+  padding: 8px;
+}
+
+.agentcommands-picker--error {
+  color: var(--color-error);
+}
+
+.agentcommands-picker__agent {
+  margin: 4px 4px 2px;
+  color: var(--color-text-maxcontrast);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.agentcommands-picker__command {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 8px;
+  border: 0;
+  border-radius: var(--border-radius);
+  background: transparent;
+  color: var(--color-main-text);
+  text-align: start;
+  cursor: pointer;
+}
+
+.agentcommands-picker__command:hover,
+.agentcommands-picker__command:focus {
+  background: var(--color-background-hover);
+}
+
+.agentcommands-picker__label {
+  font-weight: 600;
+}
+
+.agentcommands-picker__description {
+  color: var(--color-text-maxcontrast);
+  font-size: 12px;
+}

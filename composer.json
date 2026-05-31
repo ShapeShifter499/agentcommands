@@ -1,0 +1,14 @@
+{
+  "name": "shapeshifter499/agentcommands",
+  "description": "Smart Picker command bridge for AI agents in Nextcloud.",
+  "type": "project",
+  "license": "AGPL-3.0-or-later",
+  "autoload": {
+    "psr-4": {
+      "OCA\\AgentCommands\\": "lib/"
+    }
+  },
+  "require": {
+    "php": ">=8.1"
+  }
+}

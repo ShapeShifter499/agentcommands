@@ -1,0 +1,9 @@
+.git
+.github
+node_modules
+npm-debug.log*
+src
+package-lock.json
+package.json
+vite.config.mjs
+*.tgz

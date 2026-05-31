@@ -1,0 +1,5 @@
+node_modules/
+.nextcloud/
+.phpunit.result.cache
+npm-debug.log*
+*.tgz
