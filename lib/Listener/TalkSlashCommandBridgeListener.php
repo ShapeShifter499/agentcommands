@@ -88,10 +88,11 @@ class TalkSlashCommandBridgeListener implements IEventListener {
 				'type' => 'Person',
 				'id' => $actorType . '/' . $attendee->getActorId(),
 				'name' => $attendee->getDisplayName(),
+				'talkParticipantType' => (string)$attendee->getParticipantType(),
 			],
 			'object' => [
 				'type' => 'Note',
-				'id' => $comment->getId(),
+				'id' => (string)$comment->getId(),
 				'name' => 'message',
 				'content' => $content,
 				'mediaType' => 'text/markdown',
