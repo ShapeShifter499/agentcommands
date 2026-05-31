@@ -61,8 +61,19 @@ class TalkSlashCommandBridgeListener implements IEventListener {
 
 		$target = strtolower($matches['target']);
 		$room = $event->getRoom();
+		$this->logger->info('Agent Commands slash bridge matched Talk command', [
+			'app' => Application::APP_ID,
+			'target' => $target,
+			'roomToken' => $room->getToken(),
+		]);
+
 		$bot = $this->findBotForTarget($room->getToken(), $target);
 		if ($bot === null) {
+			$this->logger->warning('Agent Commands slash bridge found no matching Talk bot', [
+				'app' => Application::APP_ID,
+				'target' => $target,
+				'roomToken' => $room->getToken(),
+			]);
 			return;
 		}
 
@@ -163,8 +174,13 @@ class TalkSlashCommandBridgeListener implements IEventListener {
 			'body' => $body,
 		]);
 
-		$promise->then(null, function (\Throwable $error) use ($bot): void {
+		$promise->then(function (): void {
+			$this->logger->info('Agent Commands slash bridge invoked Talk bot webhook', [
+				'app' => Application::APP_ID,
+			]);
+		}, function (\Throwable $error) use ($bot): void {
 			$this->logger->warning('Agent Commands slash bridge failed to invoke Talk bot ' . $bot['name'], [
+				'app' => Application::APP_ID,
 				'exception' => $error,
 			]);
 		});
