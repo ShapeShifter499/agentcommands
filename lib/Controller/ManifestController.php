@@ -92,32 +92,38 @@ class ManifestController extends Controller {
 	private function defaultOpenClawManifest(): array {
 		return [
 			'id' => 'openclaw',
-			'name' => 'OpenClaw',
+			'name' => 'Nymble / OpenClaw',
 			'owner' => 'local',
 			'commands' => [
 				[
 					'id' => 'help',
 					'label' => 'Help',
-					'description' => 'Show available commands.',
-					'insert' => 'help',
+					'description' => 'Ask Nymble for command help.',
+					'insert' => '/nymble help',
 				],
 				[
 					'id' => 'commands',
 					'label' => 'Commands',
-					'description' => 'List all OpenClaw commands.',
-					'insert' => 'commands',
+					'description' => 'List available Nymble/OpenClaw commands.',
+					'insert' => '/nymble commands',
 				],
 				[
 					'id' => 'status',
 					'label' => 'Status',
-					'description' => 'Show current OpenClaw status.',
-					'insert' => 'status',
+					'description' => 'Show current OpenClaw status from Talk.',
+					'insert' => '/nymble status',
 				],
 				[
 					'id' => 'btw',
 					'label' => 'Side question',
 					'description' => 'Ask a side question without changing future context.',
-					'insert' => 'btw ',
+					'insert' => '/nymble btw ',
+				],
+				[
+					'id' => 'ask',
+					'label' => 'Ask Nymble',
+					'description' => 'Start a free-form Nymble request.',
+					'insert' => '/nymble ',
 				],
 				[
 					'id' => 'approve',

@@ -12,12 +12,12 @@ This is an early scaffold:
 - loads a custom Smart Picker element
 - exposes a local command manifest endpoint at `/apps/agentcommands/api/commands`
 - lets authenticated Nextcloud accounts publish command manifests
-- inserts OpenClaw-oriented command text such as `commands`
+- inserts Talk-ready command text such as `/nymble status`
 - experimentally bridges Talk messages like `/nymble status` to the matching configured Talk bot webhook
 - can also follow Nextcloud's in-process bot pattern with a `nextcloudapp://agentcommands` event bot, similar to `nextcloud/command_bot`
 
-The initial inserted command text avoids slash-style commands because Talk may store those messages without waking configured bot webhooks on the live server.
-The slash bridge is a server-side workaround for that behavior: when Talk stores `/nymble ...` as a normal message, the app signs and forwards a standard Talk bot webhook payload to the matching bot configured in that conversation.
+The default command menu is designed for the live slash bridge: it inserts `/nymble help`, `/nymble commands`, `/nymble status`, `/nymble btw `, `/nymble `, `/approve `, and `/deny `.
+The slash bridge handles the Talk behavior where slash-style messages can be stored as normal messages without waking configured bot webhooks: when Talk stores `/nymble ...`, `/agent ...`, or `/aurel ...`, the app signs and forwards a standard Talk bot webhook payload to the matching bot configured in that conversation.
 
 ### Experimental Talk event bot bridge
 
