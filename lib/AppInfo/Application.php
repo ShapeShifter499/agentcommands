@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace OCA\AgentCommands\AppInfo;
 
 use OCA\AgentCommands\Listener\ReferenceRenderListener;
+use OCA\AgentCommands\Listener\TalkBotInvokeListener;
 use OCA\AgentCommands\Listener\TalkSlashCommandBridgeListener;
 use OCA\AgentCommands\Reference\AgentCommandsProvider;
+use OCA\Talk\Events\BotInvokeEvent;
 use OCP\AppFramework\App;
 use OCP\AppFramework\Bootstrap\IBootContext;
 use OCP\AppFramework\Bootstrap\IBootstrap;
@@ -25,6 +27,7 @@ class Application extends App implements IBootstrap {
 		$context->registerReferenceProvider(AgentCommandsProvider::class);
 		$context->registerEventListener(RenderReferenceEvent::class, ReferenceRenderListener::class);
 		$context->registerEventListener(BeforeTemplateRenderedEvent::class, ReferenceRenderListener::class);
+		$context->registerEventListener(BotInvokeEvent::class, TalkBotInvokeListener::class);
 		$context->registerEventListener(\OCA\Talk\Events\BeforeChatMessageSentEvent::class, TalkSlashCommandBridgeListener::class);
 	}
 

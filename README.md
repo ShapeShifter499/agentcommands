@@ -14,9 +14,26 @@ This is an early scaffold:
 - lets authenticated Nextcloud accounts publish command manifests
 - inserts OpenClaw-oriented command text such as `commands`
 - experimentally bridges Talk messages like `/nymble status` to the matching configured Talk bot webhook
+- can also follow Nextcloud's in-process bot pattern with a `nextcloudapp://agentcommands` event bot, similar to `nextcloud/command_bot`
 
 The initial inserted command text avoids slash-style commands because Talk may store those messages without waking configured bot webhooks on the live server.
 The slash bridge is a server-side workaround for that behavior: when Talk stores `/nymble ...` as a normal message, the app signs and forwards a standard Talk bot webhook payload to the matching bot configured in that conversation.
+
+### Experimental Talk event bot bridge
+
+Nextcloud's `command_bot` app uses a local Talk event bot instead of the deprecated `talk_commands` table. To try the same path, install Agent Commands as a Talk event bot, set it up in the room, and keep the existing webhook bot such as `Nymble` configured in that same room:
+
+```bash
+SECRET="$(openssl rand -hex 64)"
+php occ talk:bot:install --feature event \
+  "Agent Commands" "$SECRET" "nextcloudapp://agentcommands" \
+  "Bridge /nymble-style Talk messages to configured agent webhook bots"
+
+php occ talk:bot:list --output=json_pretty
+php occ talk:bot:setup <agent-commands-bot-id> <room-token>
+```
+
+When the event bot receives `/nymble ...`, `/agent ...`, or `/aurel ...`, Agent Commands looks for the matching webhook bot in that room and forwards the normal signed Talk bot payload to that bot's webhook URL.
 
 ## Development
 
