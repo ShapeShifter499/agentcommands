@@ -13,8 +13,10 @@ This is an early scaffold:
 - exposes a local command manifest endpoint at `/apps/agentcommands/api/commands`
 - lets authenticated Nextcloud accounts publish command manifests
 - inserts OpenClaw-oriented command text such as `commands`
+- experimentally bridges Talk messages like `/nymble status` to the matching configured Talk bot webhook
 
 The initial inserted command text avoids slash-style commands because Talk may store those messages without waking configured bot webhooks on the live server.
+The slash bridge is a server-side workaround for that behavior: when Talk stores `/nymble ...` as a normal message, the app signs and forwards a standard Talk bot webhook payload to the matching bot configured in that conversation.
 
 ## Development
 

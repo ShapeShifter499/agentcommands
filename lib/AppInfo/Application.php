@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace OCA\AgentCommands\AppInfo;
 
 use OCA\AgentCommands\Listener\ReferenceRenderListener;
+use OCA\AgentCommands\Listener\TalkSlashCommandBridgeListener;
 use OCA\AgentCommands\Reference\AgentCommandsProvider;
 use OCP\AppFramework\App;
 use OCP\AppFramework\Bootstrap\IBootContext;
@@ -24,6 +25,9 @@ class Application extends App implements IBootstrap {
 		$context->registerReferenceProvider(AgentCommandsProvider::class);
 		$context->registerEventListener(RenderReferenceEvent::class, ReferenceRenderListener::class);
 		$context->registerEventListener(BeforeTemplateRenderedEvent::class, ReferenceRenderListener::class);
+		if (class_exists(\OCA\Talk\Events\ChatMessageSentEvent::class)) {
+			$context->registerEventListener(\OCA\Talk\Events\ChatMessageSentEvent::class, TalkSlashCommandBridgeListener::class);
+		}
 	}
 
 	public function boot(IBootContext $context): void {
