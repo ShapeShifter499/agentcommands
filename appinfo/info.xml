@@ -18,7 +18,7 @@ The initial app ships a local OpenClaw command manifest and picker. Future versi
     <website>https://github.com/ShapeShifter499/agentcommands</website>
     <repository type="git">https://github.com/ShapeShifter499/agentcommands.git</repository>
     <dependencies>
-        <nextcloud min-version="29" max-version="32"/>
+        <nextcloud min-version="29" max-version="34"/>
         <php min-version="8.1"/>
     </dependencies>
 </info>
