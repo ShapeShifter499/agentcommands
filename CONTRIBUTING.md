@@ -20,5 +20,5 @@ Do not add `Signed-off-by:` unless you personally intend to make the legal certi
 
 - Keep the Smart Picker UI small and predictable.
 - Do not store bot credentials or secrets in manifests.
-- Prefer app-password-authenticated bot accounts for manifest publishing.
+- Prefer dedicated Nextcloud user accounts with app passwords for manifest publishing; the matching Talk bot record is separate and should use its own Talk bot secret.
 - Test against a real Nextcloud instance before marking Smart Picker behavior complete.

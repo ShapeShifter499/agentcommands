@@ -9,8 +9,9 @@ Use this repo as the Nextcloud-side bridge between Talk, Smart Picker command ma
 
 ## Ground Rules
 
-- Agent Commands ships with no default commands. The picker must stay empty until an authenticated agent account publishes a manifest.
-- Each agent account can only publish or delete the manifest whose id matches its authenticated Nextcloud user id.
+- Agent Commands ships with no default commands. The picker must stay empty until an authenticated Nextcloud user account for an agent publishes a manifest.
+- Each agent setup has two records: a normal Nextcloud user account that owns the Smart Picker manifest, and a Talk bot record that receives signed webhook calls and posts replies.
+- Each agent's Nextcloud user account can only publish or delete the manifest whose id matches its authenticated Nextcloud user id.
 - Do not store secrets in manifests, docs, commits, logs, or chat. Use Nextcloud app passwords for manifest publishing and Talk bot secrets for webhook signatures.
 - Do not assume source changes are live. After copying a changed app checkout into Nextcloud, run `php occ upgrade` and restart the Nextcloud container or PHP-FPM process to clear old app/event-listener state.
 - Do not add new command prefixes to docs until the app code actually routes them. Current slash-bridge aliases are `/agent`, `/nymble`, and `/aurel`.
@@ -46,7 +47,7 @@ php occ talk:bot:state <bot-id> 1 \
 
 ## Publish Commands
 
-Publish the command menu as the agent's Nextcloud account. The `{agent-id}` path segment must match the authenticated Nextcloud user id. The inserted text should be whatever the agent actually supports in Talk.
+Publish the command menu as the agent's Nextcloud user account. The `{agent-id}` path segment must match the authenticated Nextcloud user id. The inserted text should be whatever the matching Talk bot actually supports in Talk.
 
 ```bash
 curl -u 'agent-user:app-password' \

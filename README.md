@@ -11,13 +11,20 @@ This is an early scaffold:
 - registers a discoverable reference provider: `agentcommands`
 - loads a custom Smart Picker element
 - exposes a local command manifest endpoint at `/apps/agentcommands/api/commands`
-- lets authenticated Nextcloud accounts publish command manifests
+- lets authenticated Nextcloud user accounts publish command manifests
 - inserts Talk-ready command text from explicitly registered agent manifests
 - experimentally bridges Talk messages like `/nymble status` to the matching configured Talk bot webhook
 - can also follow Nextcloud's in-process bot pattern with a `nextcloudapp://agentcommands` event bot, similar to `nextcloud/command_bot`
 
-The app does not ship opinionated default commands. The Smart Picker menu stays empty until an authenticated agent account publishes a manifest. This keeps local command surfaces owned by the agents that actually support them.
+The app does not ship opinionated default commands. The Smart Picker menu stays empty until an authenticated Nextcloud user account for an agent publishes a manifest. This keeps local command surfaces owned by the agents that actually support them.
 The slash bridge handles the Talk behavior where slash-style messages can be stored as normal messages without waking configured bot webhooks: when Talk stores `/nymble ...`, `/agent ...`, or `/aurel ...`, the app signs and forwards a standard Talk bot webhook payload to the matching bot configured in that conversation.
+
+Each agent setup has two separate Nextcloud records:
+
+- a normal Nextcloud user account, usually named after the agent, that owns the Smart Picker command manifest through username/app-password authentication
+- a Talk bot record in the relevant room that receives signed webhook calls and posts replies
+
+For example, a `nymble` Nextcloud user publishes `/apps/agentcommands/api/agents/nymble`, while the `Nymble` Talk bot receives `/nymble ...` bridge webhooks in rooms where that bot is configured.
 
 ### Experimental Talk event bot bridge
 
@@ -77,36 +84,36 @@ Before publishing, replace the repository URLs in `appinfo/info.xml`, test again
 
 ## Manifest Direction
 
-The picker lists manifests published by authenticated Nextcloud accounts. There is no built-in command manifest; each agent owns the labels and inserted command text it advertises. An agent account can only publish or delete the manifest whose id matches its authenticated Nextcloud user id, so one agent cannot overwrite another agent's command list.
+The picker lists manifests published by authenticated Nextcloud user accounts. There is no built-in command manifest; each agent owns the labels and inserted command text it advertises. An agent's Nextcloud user account can only publish or delete the manifest whose id matches its authenticated Nextcloud user id, so one agent cannot overwrite another agent's command list.
 
-Bot accounts can publish or replace their command list with a normal app password:
+Agent user accounts can publish or replace their command list with a normal app password:
 
 ```bash
-curl -u 'bot-user:app-password' \
+curl -u 'agent-user:app-password' \
   -H 'OCS-APIRequest: true' \
   -H 'Content-Type: application/json' \
   -X PUT \
-  'https://cloud.example.com/apps/agentcommands/api/agents/bot-user' \
+  'https://cloud.example.com/apps/agentcommands/api/agents/agent-user' \
   --data '{
-    "name": "Bot User",
+    "name": "Agent Display Name",
     "commands": [
       {
         "id": "help",
         "label": "Help",
         "description": "Show this agent command help.",
-        "insert": "@My Agent !help"
+        "insert": "/agent-user help"
       }
     ]
   }'
 ```
 
-The app stores manifests under the publishing Nextcloud account, so a bot can update or delete its own list without admin rights:
+The app stores manifests under the publishing Nextcloud user account, so an agent can update or delete its own list without admin rights:
 
 ```bash
-curl -u 'bot-user:app-password' \
+curl -u 'agent-user:app-password' \
   -H 'OCS-APIRequest: true' \
   -X DELETE \
-  'https://cloud.example.com/apps/agentcommands/api/agents/bot-user'
+  'https://cloud.example.com/apps/agentcommands/api/agents/agent-user'
 ```
 
 The manifest contract is intentionally small:
