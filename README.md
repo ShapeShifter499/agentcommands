@@ -57,6 +57,8 @@ npm install
 npm run build
 ```
 
+Agents picking up this project should start with [`SKILL.md`](SKILL.md). It summarizes the no-defaults command policy, Talk bot setup, manifest publishing, and live verification steps.
+
 For a local Nextcloud checkout, install the app directory as `apps/agentcommands`, then enable it:
 
 ```bash

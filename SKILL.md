@@ -1,0 +1,118 @@
+---
+name: agentcommands
+description: Use when integrating an AI agent with the Agent Commands Nextcloud app, publishing Smart Picker command manifests, setting up Talk bot webhooks, or verifying Talk slash-bridge behavior.
+---
+
+# Agent Commands Skill
+
+Use this repo as the Nextcloud-side bridge between Talk, Smart Picker command manifests, and AI-agent webhook bots.
+
+## Ground Rules
+
+- Agent Commands ships with no default commands. The picker must stay empty until an authenticated agent account publishes a manifest.
+- Do not store secrets in manifests, docs, commits, logs, or chat. Use Nextcloud app passwords for manifest publishing and Talk bot secrets for webhook signatures.
+- Do not assume source changes are live. After copying a changed app checkout into Nextcloud, run `php occ upgrade` and restart the Nextcloud container or PHP-FPM process to clear old app/event-listener state.
+- Do not add new command prefixes to docs until the app code actually routes them. Current slash-bridge aliases are `/agent`, `/nymble`, and `/aurel`.
+
+## Attach An Agent
+
+1. Create or identify a Nextcloud account for the agent.
+2. Create a Nextcloud app password for that account.
+3. Install or update the agent's Talk webhook bot:
+
+```bash
+php occ talk:bot:install \
+  -f webhook -f response -f reaction -- \
+  "<bot name>" "<shared-secret>" "https://agent.example.com/nextcloud-talk-webhook" \
+  "<description>"
+```
+
+4. Add the bot to the Talk room:
+
+```bash
+php occ talk:bot:list --output=json_pretty
+php occ talk:bot:setup <bot-id> <room-token>
+```
+
+5. If the bot already exists and only its enabled features need changing, update it in place:
+
+```bash
+php occ talk:bot:state <bot-id> 1 \
+  --feature webhook \
+  --feature response \
+  --feature reaction
+```
+
+## Publish Commands
+
+Publish the command menu as the agent's Nextcloud account. The inserted text should be whatever the agent actually supports in Talk.
+
+```bash
+curl -u 'agent-user:app-password' \
+  -H 'OCS-APIRequest: true' \
+  -H 'Content-Type: application/json' \
+  -X PUT \
+  'https://cloud.example.com/apps/agentcommands/api/agents/agent-id' \
+  --data '{
+    "name": "Agent Display Name",
+    "commands": [
+      {
+        "id": "status",
+        "label": "Status",
+        "description": "Show current agent status.",
+        "insert": "/agent status"
+      }
+    ]
+  }'
+```
+
+Manifest rules:
+
+- `id`: stable command id using letters, numbers, underscores, or hyphens.
+- `label`: short Smart Picker label.
+- `description`: short explanation for the picker.
+- `insert`: exact text inserted into the composer.
+
+Remove a manifest with:
+
+```bash
+curl -u 'agent-user:app-password' \
+  -H 'OCS-APIRequest: true' \
+  -X DELETE \
+  'https://cloud.example.com/apps/agentcommands/api/agents/agent-id'
+```
+
+## Verify
+
+Check the manifest endpoint:
+
+```bash
+curl -u 'agent-user:app-password' \
+  -H 'OCS-APIRequest: true' \
+  'https://cloud.example.com/apps/agentcommands/api/commands'
+```
+
+Then test from Talk:
+
+1. Open a room containing the agent's Talk bot.
+2. Open the Smart Picker and select the agent command.
+3. Send the inserted text.
+4. Confirm Nextcloud logs show the Agent Commands slash bridge invoking the webhook with `statusCode: "200"`.
+
+Useful log filter:
+
+```bash
+tail -n 120 /var/www/html/data/nextcloud.log \
+  | grep -i "Agent Commands slash bridge\|invalid signature\|statusCode"
+```
+
+## Update Installed App
+
+After editing this app source:
+
+```bash
+npm run build
+php occ upgrade
+```
+
+Restart Nextcloud or PHP-FPM before live Talk tests. If Talk still behaves like old code, assume stale PHP/opcache/app-bootstrap state until restart proves otherwise.
