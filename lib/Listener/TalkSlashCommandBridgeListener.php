@@ -20,6 +20,8 @@ use Psr\Log\LoggerInterface;
 class TalkSlashCommandBridgeListener implements IEventListener {
 	private const BOT_STATE_ENABLED = 1;
 	private const BOT_FEATURE_WEBHOOK = 1;
+	private const DEDUPE_TTL_SECONDS = 10;
+	private const DEDUPE_CONFIG_KEY = 'talk_slash_bridge_recent';
 
 	public function __construct(
 		private IDBConnection $db,
@@ -61,6 +63,16 @@ class TalkSlashCommandBridgeListener implements IEventListener {
 
 		$target = strtolower($matches['target']);
 		$room = $event->getRoom();
+		if ($this->shouldSkipRecentDuplicate($room->getToken(), $actorType, (string)$attendee->getActorId(), $rawMessage)) {
+			$this->logger->warning('Agent Commands slash bridge skipped duplicate Talk command event', [
+				'app' => Application::APP_ID,
+				'target' => $target,
+				'roomToken' => $room->getToken(),
+				'messageId' => (string)$comment->getId(),
+			]);
+			return;
+		}
+
 		$this->logger->warning('Agent Commands slash bridge matched Talk command', [
 			'app' => Application::APP_ID,
 			'target' => $target,
@@ -149,6 +161,34 @@ class TalkSlashCommandBridgeListener implements IEventListener {
 		}
 
 		return $normalized === $target || $firstWord === $target;
+	}
+
+	private function shouldSkipRecentDuplicate(string $roomToken, string $actorType, string $actorId, string $rawMessage): bool {
+		$now = time();
+		$key = hash('sha256', $roomToken . "\0" . $actorType . "\0" . $actorId . "\0" . $rawMessage);
+		$recent = json_decode($this->config->getAppValue(Application::APP_ID, self::DEDUPE_CONFIG_KEY, '{}'), true);
+		if (!is_array($recent)) {
+			$recent = [];
+		}
+
+		foreach ($recent as $recentKey => $timestamp) {
+			if (!is_int($timestamp) && !ctype_digit((string)$timestamp)) {
+				unset($recent[$recentKey]);
+				continue;
+			}
+			if ($now - (int)$timestamp > self::DEDUPE_TTL_SECONDS) {
+				unset($recent[$recentKey]);
+			}
+		}
+
+		if (isset($recent[$key])) {
+			$this->config->setAppValue(Application::APP_ID, self::DEDUPE_CONFIG_KEY, json_encode($recent, JSON_THROW_ON_ERROR));
+			return true;
+		}
+
+		$recent[$key] = $now;
+		$this->config->setAppValue(Application::APP_ID, self::DEDUPE_CONFIG_KEY, json_encode($recent, JSON_THROW_ON_ERROR));
+		return false;
 	}
 
 	private function sendWebhook(string $botName, string $botUrl, string $botSecret, string $body): void {
