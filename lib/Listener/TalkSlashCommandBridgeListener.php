@@ -20,8 +20,9 @@ use Psr\Log\LoggerInterface;
 class TalkSlashCommandBridgeListener implements IEventListener {
 	private const BOT_STATE_ENABLED = 1;
 	private const BOT_FEATURE_WEBHOOK = 1;
-	private const DEDUPE_TTL_SECONDS = 10;
+	private const DEDUPE_TTL_SECONDS = 300;
 	private const DEDUPE_CONFIG_KEY = 'talk_slash_bridge_recent';
+	private const PARSE_EVENT_MAX_AGE_SECONDS = 90;
 
 	public function __construct(
 		private IDBConnection $db,
@@ -35,12 +36,18 @@ class TalkSlashCommandBridgeListener implements IEventListener {
 
 	#[\Override]
 	public function handle(Event $event): void {
-		if (!class_exists(\OCA\Talk\Events\AMessageSentEvent::class)
-			|| !$event instanceof \OCA\Talk\Events\AMessageSentEvent) {
+		if ($this->config->getAppValue(Application::APP_ID, 'talk_slash_bridge_enabled', '1') !== '1') {
 			return;
 		}
 
-		if ($this->config->getAppValue(Application::APP_ID, 'talk_slash_bridge_enabled', '1') !== '1') {
+		if (class_exists(\OCA\Talk\Events\MessageParseEvent::class)
+			&& $event instanceof \OCA\Talk\Events\MessageParseEvent) {
+			$this->handleMessageParseEvent($event);
+			return;
+		}
+
+		if (!class_exists(\OCA\Talk\Events\AMessageSentEvent::class)
+			|| !$event instanceof \OCA\Talk\Events\AMessageSentEvent) {
 			return;
 		}
 
@@ -63,12 +70,83 @@ class TalkSlashCommandBridgeListener implements IEventListener {
 
 		$target = strtolower($matches['target']);
 		$room = $event->getRoom();
-		if ($this->shouldSkipRecentDuplicate($room->getToken(), $actorType, (string)$attendee->getActorId(), $rawMessage)) {
+		$this->processCommand(
+			$room->getToken(),
+			$room->getName(),
+			$rawMessage,
+			$target,
+			$actorType,
+			(string)$attendee->getActorId(),
+			$attendee->getDisplayName(),
+			(string)$attendee->getParticipantType(),
+			(string)$comment->getId(),
+			'talk-message-sent',
+		);
+	}
+
+	private function handleMessageParseEvent(\OCA\Talk\Events\MessageParseEvent $event): void {
+		$message = $event->getMessage();
+		$comment = $message->getComment();
+		if ($comment === null) {
+			return;
+		}
+
+		$ageSeconds = time() - $comment->getCreationDateTime()->getTimestamp();
+		if ($ageSeconds < 0 || $ageSeconds > self::PARSE_EVENT_MAX_AGE_SECONDS) {
+			return;
+		}
+
+		$rawMessage = trim($message->getMessageRaw() ?: $message->getMessage() ?: $comment->getMessage());
+		if ($rawMessage === '' || !preg_match('/^\/(?P<target>agent|nymble|aurel)(?:@[^\s]+)?(?:\s+[\s\S]*)?$/i', $rawMessage, $matches)) {
+			return;
+		}
+
+		$actorType = $message->getActorType();
+		if (!in_array($actorType, ['users', 'guests', 'federated_users', 'emails'], true)) {
+			return;
+		}
+
+		$participantType = '';
+		$participant = $message->getParticipant();
+		$attendee = $participant?->getAttendee();
+		if ($attendee !== null) {
+			$participantType = (string)$attendee->getParticipantType();
+		}
+
+		$room = $event->getRoom();
+		$this->processCommand(
+			$room->getToken(),
+			$room->getName(),
+			$rawMessage,
+			strtolower($matches['target']),
+			$actorType,
+			$message->getActorId(),
+			$message->getActorDisplayName(),
+			$participantType,
+			(string)$comment->getId(),
+			'talk-message-parse',
+		);
+	}
+
+	private function processCommand(
+		string $roomToken,
+		string $roomName,
+		string $rawMessage,
+		string $target,
+		string $actorType,
+		string $actorId,
+		string $actorDisplayName,
+		string $participantType,
+		string $messageId,
+		string $eventSource,
+	): void {
+		if ($this->shouldSkipRecentDuplicate($roomToken, $actorType, $actorId, $rawMessage, $messageId)) {
 			$this->logger->warning('Agent Commands slash bridge skipped duplicate Talk command event', [
 				'app' => Application::APP_ID,
 				'target' => $target,
-				'roomToken' => $room->getToken(),
-				'messageId' => (string)$comment->getId(),
+				'roomToken' => $roomToken,
+				'messageId' => $messageId,
+				'eventSource' => $eventSource,
 			]);
 			return;
 		}
@@ -76,16 +154,18 @@ class TalkSlashCommandBridgeListener implements IEventListener {
 		$this->logger->warning('Agent Commands slash bridge matched Talk command', [
 			'app' => Application::APP_ID,
 			'target' => $target,
-			'roomToken' => $room->getToken(),
-			'messageId' => (string)$comment->getId(),
+			'roomToken' => $roomToken,
+			'messageId' => $messageId,
+			'eventSource' => $eventSource,
 		]);
 
-		$bot = $this->findBotForTarget($room->getToken(), $target);
+		$bot = $this->findBotForTarget($roomToken, $target);
 		if ($bot === null) {
 			$this->logger->warning('Agent Commands slash bridge found no matching Talk bot', [
 				'app' => Application::APP_ID,
 				'target' => $target,
-				'roomToken' => $room->getToken(),
+				'roomToken' => $roomToken,
+				'eventSource' => $eventSource,
 			]);
 			return;
 		}
@@ -99,21 +179,21 @@ class TalkSlashCommandBridgeListener implements IEventListener {
 			'type' => 'Create',
 			'actor' => [
 				'type' => 'Person',
-				'id' => $actorType . '/' . $attendee->getActorId(),
-				'name' => $attendee->getDisplayName(),
-				'talkParticipantType' => (string)$attendee->getParticipantType(),
+				'id' => $actorType . '/' . $actorId,
+				'name' => $actorDisplayName,
+				'talkParticipantType' => $participantType,
 			],
 			'object' => [
 				'type' => 'Note',
-				'id' => (string)$comment->getId(),
+				'id' => $messageId,
 				'name' => 'message',
 				'content' => $content,
 				'mediaType' => 'text/markdown',
 			],
 			'target' => [
 				'type' => 'Collection',
-				'id' => $room->getToken(),
-				'name' => $room->getName(),
+				'id' => $roomToken,
+				'name' => $roomName,
 			],
 		], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
 
@@ -163,9 +243,10 @@ class TalkSlashCommandBridgeListener implements IEventListener {
 		return $normalized === $target || $firstWord === $target;
 	}
 
-	private function shouldSkipRecentDuplicate(string $roomToken, string $actorType, string $actorId, string $rawMessage): bool {
+	private function shouldSkipRecentDuplicate(string $roomToken, string $actorType, string $actorId, string $rawMessage, string $messageId): bool {
 		$now = time();
-		$key = hash('sha256', $roomToken . "\0" . $actorType . "\0" . $actorId . "\0" . $rawMessage);
+		$keyMaterial = $messageId !== '' ? $messageId : $actorType . "\0" . $actorId . "\0" . $rawMessage;
+		$key = hash('sha256', $roomToken . "\0" . $keyMaterial);
 		$recent = json_decode($this->config->getAppValue(Application::APP_ID, self::DEDUPE_CONFIG_KEY, '{}'), true);
 		if (!is_array($recent)) {
 			$recent = [];

@@ -9,7 +9,7 @@ Agent Commands adds a Smart Picker provider for AI-agent bot commands in Nextclo
 
 Agents publish their own command manifests so the picker becomes a shared command discovery layer without hard-coded local commands.
     ]]></description>
-    <version>0.2.11</version>
+    <version>0.2.12</version>
     <licence>agpl</licence>
     <author mail="">Lance</author>
     <namespace>AgentCommands</namespace>
