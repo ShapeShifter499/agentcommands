@@ -12,9 +12,9 @@ This is an early scaffold:
 - loads a custom Smart Picker element
 - exposes a local command manifest endpoint at `/apps/agentcommands/api/commands`
 - lets authenticated Nextcloud accounts publish command manifests
-- inserts OpenClaw-oriented command text such as `/agent commands`
+- inserts OpenClaw-oriented command text such as `commands`
 
-The initial inserted command text is intentionally conservative. It can be changed once we verify which message shapes wake Talk bots reliably on the live server.
+The initial inserted command text avoids slash-style commands because Talk may store those messages without waking configured bot webhooks on the live server.
 
 ## Development
 

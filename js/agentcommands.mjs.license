@@ -37,7 +37,7 @@ This file is generated from multiple sources. Included packages:
 	- version: 9.8.1
 	- license: AGPL-3.0-or-later
 - agentcommands
-	- version: 0.1.8
+	- version: 0.1.9
 	- license: AGPL-3.0-or-later
 - axios
 	- version: 1.16.1
