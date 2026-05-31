@@ -65,6 +65,7 @@ class TalkSlashCommandBridgeListener implements IEventListener {
 			'app' => Application::APP_ID,
 			'target' => $target,
 			'roomToken' => $room->getToken(),
+			'messageId' => (string)$comment->getId(),
 		]);
 
 		$bot = $this->findBotForTarget($room->getToken(), $target);

@@ -28,7 +28,7 @@ class Application extends App implements IBootstrap {
 		$context->registerEventListener(RenderReferenceEvent::class, ReferenceRenderListener::class);
 		$context->registerEventListener(BeforeTemplateRenderedEvent::class, ReferenceRenderListener::class);
 		$context->registerEventListener(BotInvokeEvent::class, TalkBotInvokeListener::class);
-		$context->registerEventListener(\OCA\Talk\Events\BeforeChatMessageSentEvent::class, TalkSlashCommandBridgeListener::class);
+		$context->registerEventListener(\OCA\Talk\Events\ChatMessageSentEvent::class, TalkSlashCommandBridgeListener::class);
 	}
 
 	public function boot(IBootContext $context): void {
