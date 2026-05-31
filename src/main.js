@@ -32,6 +32,11 @@ class AgentCommandsPicker extends HTMLElement {
   }
 
   renderCommands(agents) {
+    if (agents.length === 0) {
+      this.innerHTML = `<div class="agentcommands-picker">${escapeHtml(t('agentcommands', 'No agent commands configured.'))}</div>`
+      return
+    }
+
     const body = agents.flatMap((agent) => {
       const commands = agent.commands ?? []
       return [

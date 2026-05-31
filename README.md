@@ -12,11 +12,11 @@ This is an early scaffold:
 - loads a custom Smart Picker element
 - exposes a local command manifest endpoint at `/apps/agentcommands/api/commands`
 - lets authenticated Nextcloud accounts publish command manifests
-- inserts Talk-ready command text such as `/nymble status`
+- inserts Talk-ready command text from explicitly registered agent manifests
 - experimentally bridges Talk messages like `/nymble status` to the matching configured Talk bot webhook
 - can also follow Nextcloud's in-process bot pattern with a `nextcloudapp://agentcommands` event bot, similar to `nextcloud/command_bot`
 
-The default command menu is designed for the live slash bridge: it inserts `/nymble help`, `/nymble commands`, `/nymble status`, `/nymble btw `, `/nymble `, `/approve `, and `/deny `.
+The app does not ship opinionated default commands. The Smart Picker menu stays empty until an authenticated agent account publishes a manifest. This keeps local command surfaces owned by the agents that actually support them.
 The slash bridge handles the Talk behavior where slash-style messages can be stored as normal messages without waking configured bot webhooks: when Talk stores `/nymble ...`, `/agent ...`, or `/aurel ...`, the app signs and forwards a standard Talk bot webhook payload to the matching bot configured in that conversation.
 
 ### Experimental Talk event bot bridge
@@ -75,7 +75,7 @@ Before publishing, replace the repository URLs in `appinfo/info.xml`, test again
 
 ## Manifest Direction
 
-The picker combines the built-in OpenClaw manifest with manifests published by authenticated Nextcloud accounts.
+The picker lists manifests published by authenticated Nextcloud accounts. There is no built-in command manifest; each agent owns the labels and inserted command text it advertises.
 
 Bot accounts can publish or replace their command list with a normal app password:
 

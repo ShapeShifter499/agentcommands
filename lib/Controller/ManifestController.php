@@ -27,7 +27,7 @@ class ManifestController extends Controller {
 	 */
 	public function commands(): JSONResponse {
 		return new JSONResponse([
-			'agents' => array_values(array_merge([$this->defaultOpenClawManifest()], $this->registeredManifests())),
+			'agents' => $this->registeredManifests(),
 		]);
 	}
 
@@ -87,58 +87,6 @@ class ManifestController extends Controller {
 		$this->config->deleteAppValue(Application::APP_ID, $this->manifestKey($user->getUID(), $agentId));
 
 		return new JSONResponse(['deleted' => true]);
-	}
-
-	private function defaultOpenClawManifest(): array {
-		return [
-			'id' => 'openclaw',
-			'name' => 'Nymble / OpenClaw',
-			'owner' => 'local',
-			'commands' => [
-				[
-					'id' => 'help',
-					'label' => 'Help',
-					'description' => 'Ask Nymble for command help.',
-					'insert' => '/nymble help',
-				],
-				[
-					'id' => 'commands',
-					'label' => 'Commands',
-					'description' => 'List available Nymble/OpenClaw commands.',
-					'insert' => '/nymble commands',
-				],
-				[
-					'id' => 'status',
-					'label' => 'Status',
-					'description' => 'Show current OpenClaw status from Talk.',
-					'insert' => '/nymble status',
-				],
-				[
-					'id' => 'btw',
-					'label' => 'Side question',
-					'description' => 'Ask a side question without changing future context.',
-					'insert' => '/nymble btw ',
-				],
-				[
-					'id' => 'ask',
-					'label' => 'Ask Nymble',
-					'description' => 'Start a free-form Nymble request.',
-					'insert' => '/nymble ',
-				],
-				[
-					'id' => 'approve',
-					'label' => 'Approve once',
-					'description' => 'Approve a pending OpenClaw request once.',
-					'insert' => '/approve ',
-				],
-				[
-					'id' => 'deny',
-					'label' => 'Deny',
-					'description' => 'Deny a pending OpenClaw request.',
-					'insert' => '/deny ',
-				],
-			],
-		];
 	}
 
 	private function registeredManifests(): array {
