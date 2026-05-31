@@ -160,7 +160,7 @@ class TalkSlashCommandBridgeListener implements IEventListener {
 		$backend = rtrim($this->config->getSystemValueString('overwrite.cli.url'), '/') . '/';
 
 		$client = $this->clientService->newClient();
-		$promise = $client->postAsync($bot['url'], [
+		$options = [
 			'verify' => $this->certificateManager->getAbsoluteBundlePath(),
 			'nextcloud' => [
 				'allow_local_address' => true,
@@ -174,17 +174,27 @@ class TalkSlashCommandBridgeListener implements IEventListener {
 			],
 			'timeout' => 5,
 			'body' => $body,
+		];
+
+		$this->logger->warning('Agent Commands slash bridge posting Talk bot webhook', [
+			'app' => Application::APP_ID,
+			'botName' => $bot['name'],
+			'headerStyle' => 'X-Nextcloud-Talk',
+			'payload' => $body,
 		]);
 
-		$promise->then(function (): void {
+		try {
+			$response = $client->post($bot['url'], $options);
 			$this->logger->warning('Agent Commands slash bridge invoked Talk bot webhook', [
 				'app' => Application::APP_ID,
+				'botName' => $bot['name'],
+				'statusCode' => $response->getStatusCode(),
 			]);
-		}, function (\Throwable $error) use ($bot): void {
+		} catch (\Throwable $error) {
 			$this->logger->warning('Agent Commands slash bridge failed to invoke Talk bot ' . $bot['name'], [
 				'app' => Application::APP_ID,
 				'exception' => $error,
 			]);
-		});
+		}
 	}
 }
