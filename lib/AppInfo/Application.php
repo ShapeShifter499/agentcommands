@@ -10,6 +10,7 @@ use OCP\AppFramework\App;
 use OCP\AppFramework\Bootstrap\IBootContext;
 use OCP\AppFramework\Bootstrap\IBootstrap;
 use OCP\AppFramework\Bootstrap\IRegistrationContext;
+use OCP\AppFramework\Http\Events\BeforeTemplateRenderedEvent;
 use OCP\Collaboration\Reference\RenderReferenceEvent;
 
 class Application extends App implements IBootstrap {
@@ -22,6 +23,7 @@ class Application extends App implements IBootstrap {
 	public function register(IRegistrationContext $context): void {
 		$context->registerReferenceProvider(AgentCommandsProvider::class);
 		$context->registerEventListener(RenderReferenceEvent::class, ReferenceRenderListener::class);
+		$context->registerEventListener(BeforeTemplateRenderedEvent::class, ReferenceRenderListener::class);
 	}
 
 	public function boot(IBootContext $context): void {

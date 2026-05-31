@@ -1,7 +1,10 @@
 import axios from '@nextcloud/axios'
 import { t } from '@nextcloud/l10n'
 import { generateUrl } from '@nextcloud/router'
-import { registerCustomPickerElement } from '@nextcloud/vue/functions/registerReference'
+import {
+  NcCustomPickerRenderResult,
+  registerCustomPickerElement,
+} from '@nextcloud/vue/functions/registerReference'
 
 const PROVIDER_ID = 'agentcommands'
 
@@ -72,6 +75,7 @@ customElements.define('agentcommands-picker', AgentCommandsPicker)
 registerCustomPickerElement(PROVIDER_ID, (el) => {
   const picker = document.createElement('agentcommands-picker')
   el.appendChild(picker)
+  return new NcCustomPickerRenderResult(picker)
 }, (el) => {
   el.replaceChildren()
 }, 'normal')

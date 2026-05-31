@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace OCA\AgentCommands\Listener;
 
 use OCA\AgentCommands\AppInfo\Application;
+use OCP\AppFramework\Http\Events\BeforeTemplateRenderedEvent;
 use OCP\Collaboration\Reference\RenderReferenceEvent;
 use OCP\EventDispatcher\Event;
 use OCP\EventDispatcher\IEventListener;
@@ -15,7 +16,11 @@ use OCP\Util;
  */
 class ReferenceRenderListener implements IEventListener {
 	public function handle(Event $event): void {
-		if (!$event instanceof RenderReferenceEvent) {
+		if ($event instanceof BeforeTemplateRenderedEvent && !$event->isLoggedIn()) {
+			return;
+		}
+
+		if (!$event instanceof RenderReferenceEvent && !$event instanceof BeforeTemplateRenderedEvent) {
 			return;
 		}
 
