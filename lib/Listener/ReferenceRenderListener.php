@@ -24,7 +24,7 @@ class ReferenceRenderListener implements IEventListener {
 			return;
 		}
 
-		Util::addScript(Application::APP_ID, 'agentcommands.mjs');
+		Util::addScript(Application::APP_ID, 'agentcommands');
 		Util::addStyle(Application::APP_ID, 'agentcommands');
 	}
 }
