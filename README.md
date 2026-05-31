@@ -29,6 +29,12 @@ For a local Nextcloud checkout, install the app directory as `apps/agentcommands
 php occ app:enable agentcommands
 ```
 
+When replacing an already-installed checkout after an app version bump, run the upgrade step too:
+
+```bash
+php occ upgrade
+```
+
 ## App Store Prep
 
 Before publishing, replace the repository URLs in `appinfo/info.xml`, test against the target Nextcloud versions, add screenshots, add translations, and generate a signed release archive following Nextcloud app store requirements.
