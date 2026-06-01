@@ -108,6 +108,32 @@ tail -n 120 /var/www/html/data/nextcloud.log \
   | grep -i "Agent Commands slash bridge\|invalid signature\|statusCode"
 ```
 
+## Optional OpenClaw Poller Fallback
+
+Use `contrib/openclaw/nextcloud-talk-poller` only as a fallback when Talk app/event hooks do not reliably wake the agent webhook. It polls the Talk chat API, avoids moving the room read marker, waits a handoff grace period, skips replay if a bot already answered, signs an ActivityStreams `Create` payload with the Talk bot secret, and posts to the OpenClaw Nextcloud Talk webhook.
+
+Install the generic examples outside the repo:
+
+```bash
+install -Dm755 contrib/openclaw/nextcloud-talk-poller ~/.local/bin/nextcloud-talk-poller
+install -Dm644 contrib/openclaw/openclaw-nextcloud-talk-poller.service ~/.config/systemd/user/openclaw-nextcloud-talk-poller.service
+install -Dm600 contrib/openclaw/nextcloud-talk-poller.env.example ~/.config/agentcommands/nextcloud-talk-poller.env
+```
+
+Configure the private env file with:
+
+- `NEXTCLOUD_BASE_URL`
+- `NEXTCLOUD_TALK_ROOM`
+- `NEXTCLOUD_TALK_API_USER`
+- `NEXTCLOUD_TALK_API_PASSWORD_FILE`
+- `NEXTCLOUD_TALK_BOT_SECRET_FILE`
+- `NEXTCLOUD_TALK_WEBHOOK_URL`
+- `NEXTCLOUD_TALK_POLLER_STATE_DIR`
+- `NEXTCLOUD_TALK_ALLOWED_SENDERS`
+- `NEXTCLOUD_TALK_COMMAND_PREFIXES`
+
+Keep `NEXTCLOUD_TALK_ALLOWED_SENDERS` narrow. Run `nextcloud-talk-poller --once --dry-run` before enabling the user service.
+
 ## Update Installed App
 
 After editing this app source:

@@ -1,0 +1,370 @@
+#!/usr/bin/env node
+import crypto from "node:crypto";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+
+const DEFAULT_WEBHOOK_URL = "http://127.0.0.1:8788/nextcloud-talk-webhook";
+const DEFAULT_STATE_DIR = path.join(os.homedir(), ".local/state/agentcommands/nextcloud-talk-poller");
+const DEFAULT_COMMAND_PREFIXES = ["/agent", "/nymble", "/aurel"];
+
+function envList(name) {
+  return String(process.env[name] || "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+}
+
+function envInt(name, fallback) {
+  const value = process.env[name];
+  if (value == null || value === "") return fallback;
+  return Number.parseInt(value, 10);
+}
+
+function expandUserPath(value) {
+  if (!value) return value;
+  if (value === "~") return os.homedir();
+  if (value.startsWith("~/")) return path.join(os.homedir(), value.slice(2));
+  if (value.startsWith("%h/")) return path.join(os.homedir(), value.slice(3));
+  return value;
+}
+
+function parseArgs(argv) {
+  const out = {
+    room: process.env.NEXTCLOUD_TALK_ROOM || "",
+    baseUrl: process.env.NEXTCLOUD_BASE_URL || "",
+    apiUser: process.env.NEXTCLOUD_TALK_API_USER || "",
+    apiPasswordFile: expandUserPath(process.env.NEXTCLOUD_TALK_API_PASSWORD_FILE || ""),
+    botSecretFile: expandUserPath(process.env.NEXTCLOUD_TALK_BOT_SECRET_FILE || ""),
+    webhookUrl: process.env.NEXTCLOUD_TALK_WEBHOOK_URL || DEFAULT_WEBHOOK_URL,
+    stateDir: expandUserPath(process.env.NEXTCLOUD_TALK_POLLER_STATE_DIR || DEFAULT_STATE_DIR),
+    allowedSenders: envList("NEXTCLOUD_TALK_ALLOWED_SENDERS"),
+    commandPrefixes: envList("NEXTCLOUD_TALK_COMMAND_PREFIXES"),
+    intervalMs: envInt("NEXTCLOUD_TALK_POLLER_INTERVAL_MS", 3000),
+    handoffGraceMs: envInt("NEXTCLOUD_TALK_POLLER_HANDOFF_GRACE_MS", 12000),
+    maxPerRun: envInt("NEXTCLOUD_TALK_POLLER_MAX_PER_RUN", Number.POSITIVE_INFINITY),
+    once: false,
+    watch: false,
+    dryRun: false,
+    force: false,
+    fromId: null,
+  };
+
+  if (out.commandPrefixes.length === 0) out.commandPrefixes = DEFAULT_COMMAND_PREFIXES;
+
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
+    const next = () => {
+      i += 1;
+      if (i >= argv.length) throw new Error(`Missing value for ${arg}`);
+      return argv[i];
+    };
+    if (arg === "--once") out.once = true;
+    else if (arg === "--watch") out.watch = true;
+    else if (arg === "--dry-run") out.dryRun = true;
+    else if (arg === "--force") out.force = true;
+    else if (arg === "--room") out.room = next();
+    else if (arg === "--base-url") out.baseUrl = next();
+    else if (arg === "--api-user") out.apiUser = next();
+    else if (arg === "--api-password-file") out.apiPasswordFile = expandUserPath(next());
+    else if (arg === "--bot-secret-file") out.botSecretFile = expandUserPath(next());
+    else if (arg === "--webhook-url") out.webhookUrl = next();
+    else if (arg === "--state-dir") out.stateDir = expandUserPath(next());
+    else if (arg === "--interval-ms") out.intervalMs = Number.parseInt(next(), 10);
+    else if (arg === "--handoff-grace-ms") out.handoffGraceMs = Number.parseInt(next(), 10);
+    else if (arg === "--max-per-run") out.maxPerRun = Number.parseInt(next(), 10);
+    else if (arg === "--from-id") out.fromId = Number.parseInt(next(), 10);
+    else if (arg === "--allowed-senders") out.allowedSenders = splitCsv(next());
+    else if (arg === "--command-prefixes") out.commandPrefixes = splitCsv(next());
+    else if (arg === "--help" || arg === "-h") {
+      printHelp();
+      process.exit(0);
+    } else {
+      throw new Error(`Unknown argument: ${arg}`);
+    }
+  }
+
+  if (!out.once && !out.watch) out.once = true;
+  validateOptions(out);
+  return out;
+}
+
+function splitCsv(value) {
+  return String(value)
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function validateOptions(opts) {
+  const required = [
+    ["--base-url or NEXTCLOUD_BASE_URL", opts.baseUrl],
+    ["--room or NEXTCLOUD_TALK_ROOM", opts.room],
+    ["--api-user or NEXTCLOUD_TALK_API_USER", opts.apiUser],
+    ["--api-password-file or NEXTCLOUD_TALK_API_PASSWORD_FILE", opts.apiPasswordFile],
+    ["--bot-secret-file or NEXTCLOUD_TALK_BOT_SECRET_FILE", opts.botSecretFile],
+  ];
+  const missing = required.filter(([, value]) => !value).map(([name]) => name);
+  if (missing.length > 0) throw new Error(`Missing required option(s): ${missing.join(", ")}`);
+  if (opts.allowedSenders.length === 0) {
+    throw new Error("Set --allowed-senders or NEXTCLOUD_TALK_ALLOWED_SENDERS to avoid replaying arbitrary room messages");
+  }
+  if (opts.commandPrefixes.length === 0) {
+    throw new Error("Set --command-prefixes or NEXTCLOUD_TALK_COMMAND_PREFIXES");
+  }
+  if (!Number.isFinite(opts.intervalMs) || opts.intervalMs < 1000) {
+    throw new Error("--interval-ms must be at least 1000");
+  }
+  if (!(opts.maxPerRun === Number.POSITIVE_INFINITY) && (!Number.isFinite(opts.maxPerRun) || opts.maxPerRun < 1)) {
+    throw new Error("--max-per-run must be at least 1");
+  }
+  if (!Number.isFinite(opts.handoffGraceMs) || opts.handoffGraceMs < 0) {
+    throw new Error("--handoff-grace-ms must be a non-negative number");
+  }
+}
+
+function printHelp() {
+  console.log(`Usage: nextcloud-talk-poller [--once|--watch] [options]
+
+Poll a Nextcloud Talk room for configured command prefixes and replay missed
+commands into an OpenClaw Nextcloud Talk webhook.
+
+Required via flags or env:
+  --base-url URL                 NEXTCLOUD_BASE_URL
+  --room TOKEN                   NEXTCLOUD_TALK_ROOM
+  --api-user USER                NEXTCLOUD_TALK_API_USER
+  --api-password-file PATH       NEXTCLOUD_TALK_API_PASSWORD_FILE
+  --bot-secret-file PATH         NEXTCLOUD_TALK_BOT_SECRET_FILE
+  --allowed-senders CSV          NEXTCLOUD_TALK_ALLOWED_SENDERS
+
+Optional:
+  --command-prefixes CSV         NEXTCLOUD_TALK_COMMAND_PREFIXES, default /agent,/nymble,/aurel
+  --webhook-url URL              NEXTCLOUD_TALK_WEBHOOK_URL, default ${DEFAULT_WEBHOOK_URL}
+  --state-dir PATH               NEXTCLOUD_TALK_POLLER_STATE_DIR
+  --from-id N                    Start after Talk message id N for this run
+  --force                        Reprocess messages even if marked done
+  --dry-run                      Print what would be replayed without posting
+  --interval-ms N                Watch interval, default 3000
+  --handoff-grace-ms N           Wait before fallback replay, default 12000
+  --max-per-run N                Process at most N commands per poll pass
+`);
+}
+
+async function readTrimmed(file) {
+  return (await fs.readFile(file, "utf8")).trim();
+}
+
+function statePath(opts) {
+  return path.join(opts.stateDir, `${opts.room}.json`);
+}
+
+async function loadState(opts) {
+  try {
+    const parsed = JSON.parse(await fs.readFile(statePath(opts), "utf8"));
+    return {
+      lastSeenId: Number.isFinite(parsed.lastSeenId) ? parsed.lastSeenId : 0,
+      processed: parsed.processed && typeof parsed.processed === "object" ? parsed.processed : {},
+    };
+  } catch (err) {
+    if (err && err.code === "ENOENT") return { lastSeenId: 0, processed: {} };
+    throw err;
+  }
+}
+
+async function saveState(opts, state) {
+  await fs.mkdir(opts.stateDir, { recursive: true, mode: 0o700 });
+  const entries = Object.entries(state.processed)
+    .sort((a, b) => Number(a[0]) - Number(b[0]))
+    .slice(-500);
+  const payload = {
+    lastSeenId: state.lastSeenId,
+    processed: Object.fromEntries(entries),
+    updatedAt: new Date().toISOString(),
+  };
+  await fs.writeFile(statePath(opts), `${JSON.stringify(payload, null, 2)}\n`, { mode: 0o600 });
+}
+
+async function fetchMessages(opts, lastKnownMessageId) {
+  const apiPassword = await readTrimmed(opts.apiPasswordFile);
+  const url = new URL(`/ocs/v2.php/apps/spreed/api/v1/chat/${encodeURIComponent(opts.room)}`, opts.baseUrl);
+  url.searchParams.set("lastKnownMessageId", String(lastKnownMessageId));
+  url.searchParams.set("lookIntoFuture", "1");
+  url.searchParams.set("limit", "50");
+  url.searchParams.set("setReadMarker", "0");
+  const auth = Buffer.from(`${opts.apiUser}:${apiPassword}`, "utf8").toString("base64");
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), opts.once ? 10000 : Math.max(opts.intervalMs - 250, 1000));
+  try {
+    const res = await fetch(url, {
+      headers: {
+        Authorization: `Basic ${auth}`,
+        "OCS-APIRequest": "true",
+        Accept: "application/json",
+      },
+      signal: controller.signal,
+    });
+    if (!res.ok) throw new Error(`Talk fetch failed: HTTP ${res.status} ${await res.text()}`);
+    const json = await res.json();
+    return Array.isArray(json?.ocs?.data) ? json.ocs.data : [];
+  } catch (err) {
+    if (err?.name === "AbortError") return [];
+    throw err;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function matchesPrefix(text, prefixes) {
+  const normalized = text.trim().toLowerCase();
+  return prefixes.some((prefix) => {
+    const candidate = prefix.trim().toLowerCase();
+    return normalized === candidate || normalized.startsWith(`${candidate} `);
+  });
+}
+
+function isCommandMessage(message, opts) {
+  if (!message || message.actorType === "bots") return false;
+  if (!opts.allowedSenders.includes(String(message.actorId || ""))) return false;
+  return matchesPrefix(String(message.message || ""), opts.commandPrefixes);
+}
+
+function messageCreatedAtMs(message) {
+  const timestamp = Number(message?.timestamp);
+  if (Number.isFinite(timestamp) && timestamp > 0) return timestamp * 1000;
+  return Date.now();
+}
+
+function hasBotReplyBeforeNextUserMessage(messages, commandId) {
+  const laterMessages = messages
+    .map((message) => ({ ...message, numericId: Number(message.id) }))
+    .filter((message) => Number.isFinite(message.numericId) && message.numericId > commandId)
+    .sort((a, b) => a.numericId - b.numericId);
+
+  for (const message of laterMessages) {
+    if (message.actorType === "bots") return true;
+    if (message.actorType !== "bots") return false;
+  }
+  return false;
+}
+
+function signWebhookBody(secret, body) {
+  const random = crypto.randomBytes(32).toString("hex");
+  const signature = crypto.createHmac("sha256", secret).update(random + body).digest("hex");
+  return { random, signature };
+}
+
+async function replayMessage(opts, message) {
+  const botSecret = await readTrimmed(opts.botSecretFile);
+  const text = String(message.message || "").trim();
+  const payload = {
+    type: "Create",
+    actor: {
+      type: "Person",
+      id: String(message.actorId || ""),
+      name: String(message.actorDisplayName || message.actorId || ""),
+    },
+    object: {
+      type: "Note",
+      id: `poller-${message.id}`,
+      name: text,
+      content: text,
+      mediaType: "text/plain",
+    },
+    target: {
+      type: "Collection",
+      id: opts.room,
+      name: String(message.roomName || opts.room),
+    },
+  };
+  const body = JSON.stringify(payload);
+  const { random, signature } = signWebhookBody(botSecret, body);
+
+  if (opts.dryRun) {
+    console.log(`dry-run replay ${message.id}: ${text}`);
+    return;
+  }
+
+  const res = await fetch(opts.webhookUrl, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-nextcloud-talk-random": random,
+      "x-nextcloud-talk-signature": signature,
+      "x-nextcloud-talk-backend": opts.baseUrl,
+    },
+    body,
+  });
+  const responseText = await res.text();
+  if (!res.ok) throw new Error(`Webhook replay failed for ${message.id}: HTTP ${res.status} ${responseText}`);
+  console.log(`replayed ${message.id}: ${text}`);
+}
+
+async function runOnce(opts, state) {
+  const startAfter = opts.fromId ?? state.lastSeenId;
+  const messages = await fetchMessages(opts, startAfter);
+  let cursor = startAfter;
+  let replayed = 0;
+  const now = Date.now();
+
+  for (const message of messages.sort((a, b) => Number(a.id) - Number(b.id))) {
+    const id = Number(message.id);
+    if (!Number.isFinite(id)) continue;
+    if (id <= cursor) continue;
+    if (!isCommandMessage(message, opts)) {
+      cursor = id;
+      continue;
+    }
+    if (!opts.force && state.processed[String(id)]) {
+      cursor = id;
+      continue;
+    }
+    if (!opts.force && opts.handoffGraceMs > 0) {
+      const ageMs = now - messageCreatedAtMs(message);
+      if (ageMs < opts.handoffGraceMs) break;
+      if (hasBotReplyBeforeNextUserMessage(messages, id)) {
+        state.processed[String(id)] = new Date().toISOString();
+        cursor = id;
+        continue;
+      }
+    }
+    if (replayed >= opts.maxPerRun) break;
+    await replayMessage(opts, message);
+    if (!opts.dryRun) state.processed[String(id)] = new Date().toISOString();
+    replayed += 1;
+    cursor = id;
+  }
+
+  if (!opts.dryRun) {
+    state.lastSeenId = Math.max(state.lastSeenId, cursor);
+    await saveState(opts, state);
+  }
+  return replayed;
+}
+
+async function main() {
+  const opts = parseArgs(process.argv.slice(2));
+  const state = await loadState(opts);
+
+  if (!state.lastSeenId && opts.fromId == null) {
+    const latest = await fetchMessages(opts, 0);
+    const latestId = latest.reduce((max, message) => Math.max(max, Number(message.id) || 0), 0);
+    state.lastSeenId = latestId;
+    await saveState(opts, state);
+    console.log(`initialized state at message ${latestId}`);
+    if (opts.once) return;
+  }
+
+  do {
+    const replayed = await runOnce(opts, state);
+    if (opts.once) {
+      console.log(`done: replayed ${replayed} command(s), lastSeenId=${state.lastSeenId}`);
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, opts.intervalMs));
+  } while (opts.watch);
+}
+
+main().catch((err) => {
+  console.error(err?.stack || String(err));
+  process.exit(1);
+});

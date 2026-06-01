@@ -78,6 +78,50 @@ When replacing an already-installed checkout after an app version bump, run the 
 php occ upgrade
 ```
 
+## Optional OpenClaw Talk Poller Fallback
+
+The normal path for Agent Commands is still Nextcloud Talk events and signed Talk bot webhooks. The files in [`contrib/openclaw`](contrib/openclaw) are an optional OpenClaw-side fallback for rooms where Talk app/event hooks are delayed, stale, or do not reliably fire for command-looking messages.
+
+The fallback poller:
+
+- reads recent Talk room messages through the Talk chat OCS API without setting the read marker
+- only replays messages from explicitly configured sender ids
+- only replays messages whose text starts with configured command prefixes
+- waits a handoff grace period so the normal Talk event bridge can answer first
+- skips fallback replay when a bot reply appears before the next user message
+- signs a standard ActivityStreams `Create` payload with the configured Talk bot secret
+- posts that payload to the local OpenClaw Nextcloud Talk webhook
+- stores processed message state in a private state file written with mode `0600`
+
+Install the example files somewhere outside the app checkout:
+
+```bash
+install -Dm755 contrib/openclaw/nextcloud-talk-poller ~/.local/bin/nextcloud-talk-poller
+install -Dm644 contrib/openclaw/openclaw-nextcloud-talk-poller.service ~/.config/systemd/user/openclaw-nextcloud-talk-poller.service
+install -Dm600 contrib/openclaw/nextcloud-talk-poller.env.example ~/.config/agentcommands/nextcloud-talk-poller.env
+```
+
+Edit `~/.config/agentcommands/nextcloud-talk-poller.env` and set at least:
+
+```text
+NEXTCLOUD_BASE_URL=https://cloud.example.com
+NEXTCLOUD_TALK_ROOM=room-token
+NEXTCLOUD_TALK_API_USER=agent-user
+NEXTCLOUD_TALK_API_PASSWORD_FILE=/path/to/agent-nextcloud-app-password.txt
+NEXTCLOUD_TALK_BOT_SECRET_FILE=/path/to/talk-bot-shared-secret.txt
+NEXTCLOUD_TALK_ALLOWED_SENDERS=users/example-user
+NEXTCLOUD_TALK_COMMAND_PREFIXES=/agent,/agent-user
+```
+
+Then run a dry one-shot check before enabling the service:
+
+```bash
+nextcloud-talk-poller --once --dry-run
+systemctl --user enable --now openclaw-nextcloud-talk-poller.service
+```
+
+Use this as a safety net, not as a replacement for the Agent Commands app bridge. If the normal bridge starts answering reliably, the handoff grace and bot-reply check should keep the poller from producing duplicate replies.
+
 ## App Store Prep
 
 Before publishing, replace the repository URLs in `appinfo/info.xml`, test against the target Nextcloud versions, add screenshots, add translations, and generate a signed release archive following Nextcloud app store requirements.
