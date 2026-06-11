@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace OCA\AgentCommands\Controller;
 
 use OCA\AgentCommands\AppInfo\Application;
+use OCA\AgentCommands\Service\RoomBotLookup;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\JSONResponse;
@@ -17,6 +18,7 @@ class ManifestController extends Controller {
 		IRequest $request,
 		private IConfig $config,
 		private IUserSession $userSession,
+		private RoomBotLookup $roomBotLookup,
 	) {
 		parent::__construct(Application::APP_ID, $request);
 	}
@@ -24,10 +26,39 @@ class ManifestController extends Controller {
 	/**
 	 * @NoAdminRequired
 	 * @NoCSRFRequired
+	 *
+	 * When a Talk room token is supplied, only agents whose webhook bot is
+	 * enabled in that conversation are returned, so the picker does not offer
+	 * commands that would go nowhere.
 	 */
-	public function commands(): JSONResponse {
+	public function commands(string $room = ''): JSONResponse {
+		$manifests = $this->registeredManifests();
+
+		$room = trim($room);
+		$filtered = false;
+		if ($room !== '' && preg_match('/^[A-Za-z0-9]{1,64}$/', $room) === 1) {
+			$bots = $this->roomBotLookup->webhookBotsForRoom($room);
+			$manifests = array_values(array_filter(
+				$manifests,
+				function (array $manifest) use ($bots): bool {
+					$agentId = strtolower((string)($manifest['id'] ?? ''));
+					if ($agentId === '') {
+						return false;
+					}
+					foreach ($bots as $bot) {
+						if ($this->roomBotLookup->botMatchesTarget($bot['name'], $agentId)) {
+							return true;
+						}
+					}
+					return false;
+				},
+			));
+			$filtered = true;
+		}
+
 		return new JSONResponse([
-			'agents' => $this->registeredManifests(),
+			'agents' => $manifests,
+			'filteredByRoom' => $filtered ? $room : null,
 		]);
 	}
 

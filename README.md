@@ -17,7 +17,15 @@ This is an early scaffold:
 - can also follow Nextcloud's in-process bot pattern with a `nextcloudapp://agentcommands` event bot, similar to `nextcloud/command_bot`
 
 The app does not ship opinionated default commands. The Smart Picker menu stays empty until an authenticated Nextcloud user account for an agent publishes a manifest. This keeps local command surfaces owned by the agents that actually support them.
-The slash bridge handles the Talk behavior where slash-style messages can be stored as normal messages without waking configured bot webhooks: when Talk stores `/nymble ...`, `/agent ...`, or `/aurel ...`, the app signs and forwards a standard Talk bot webhook payload to the matching bot configured in that conversation.
+The slash bridge handles the Talk behavior where slash-style messages can be stored as normal messages without waking configured bot webhooks: when Talk stores `/<agent> ...` (or the generic `/agent ...`), the app signs and forwards a standard Talk bot webhook payload to the matching bot configured in that conversation.
+
+Valid slash targets are derived from the registered agent manifests — publishing a manifest for a new agent (e.g. `ember`) makes `/ember ...` routable with no app code change. The generic `/agent` alias resolves to the app value `default_agent_target` (default: `nymble`):
+
+```bash
+php occ config:app:set agentcommands default_agent_target --value nymble
+```
+
+The Smart Picker command list is room-aware: when opened inside a Talk conversation, only agents whose webhook bot is enabled in that conversation are listed. Outside a conversation context the full registry is shown.
 
 Agent Commands expects each agent to be set up with both a dedicated Nextcloud user account and a matching Talk bot account/record:
 
@@ -40,7 +48,7 @@ php occ talk:bot:list --output=json_pretty
 php occ talk:bot:setup <agent-commands-bot-id> <room-token>
 ```
 
-When the event bot receives `/nymble ...`, `/agent ...`, or `/aurel ...`, Agent Commands looks for the matching webhook bot in that room and forwards the normal signed Talk bot payload to that bot's webhook URL.
+When the event bot receives a `/<registered-agent> ...` or `/agent ...` message, Agent Commands looks for the matching webhook bot in that room and forwards the normal signed Talk bot payload to that bot's webhook URL.
 
 ### Talk bot administration notes
 

@@ -16,8 +16,10 @@ class AgentCommandsPicker extends HTMLElement {
 
   async loadCommands() {
     try {
-      const response = await axios.get(generateUrl('/apps/agentcommands/api/commands'))
-      this.renderCommands(response.data.agents ?? [])
+      const room = currentTalkRoomToken()
+      const url = generateUrl('/apps/agentcommands/api/commands')
+      const response = await axios.get(url, { params: room ? { room } : {} })
+      this.renderCommands(response.data.agents ?? [], response.data.filteredByRoom ?? null)
     } catch (error) {
       this.renderError(error)
     }
@@ -31,9 +33,12 @@ class AgentCommandsPicker extends HTMLElement {
     this.innerHTML = `<div class="agentcommands-picker agentcommands-picker--error">${escapeHtml(t('agentcommands', 'Commands could not be loaded.'))}</div>`
   }
 
-  renderCommands(agents) {
+  renderCommands(agents, filteredByRoom) {
     if (agents.length === 0) {
-      this.innerHTML = `<div class="agentcommands-picker">${escapeHtml(t('agentcommands', 'No agent commands configured.'))}</div>`
+      const message = filteredByRoom
+        ? t('agentcommands', 'No agent bots are enabled in this conversation.')
+        : t('agentcommands', 'No agent commands configured.')
+      this.innerHTML = `<div class="agentcommands-picker">${escapeHtml(message)}</div>`
       return
     }
 
@@ -81,6 +86,12 @@ registerCustomPickerElement(PROVIDER_ID, (el) => {
 }, (el) => {
   el.replaceChildren()
 }, 'normal')
+
+function currentTalkRoomToken() {
+  // Talk web UI routes look like /index.php/call/{token} or /call/{token}.
+  const match = window.location.pathname.match(/\/call\/([A-Za-z0-9]{1,64})(?:\/|$)/)
+  return match ? match[1] : null
+}
 
 function escapeHtml(value) {
   return String(value)
