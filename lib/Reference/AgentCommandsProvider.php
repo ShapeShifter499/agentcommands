@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace OCA\AgentCommands\Reference;
 
 use OCA\AgentCommands\AppInfo\Application;
+use OCA\AgentCommands\Service\TargetRegistry;
 use OCP\Collaboration\Reference\ADiscoverableReferenceProvider;
 use OCP\Collaboration\Reference\IReference;
 use OCP\Collaboration\Reference\Reference;
@@ -15,6 +16,7 @@ class AgentCommandsProvider extends ADiscoverableReferenceProvider {
 	public function __construct(
 		private IURLGenerator $urlGenerator,
 		private IL10N $l10n,
+		private TargetRegistry $targetRegistry,
 	) {
 	}
 
@@ -23,7 +25,15 @@ class AgentCommandsProvider extends ADiscoverableReferenceProvider {
 	}
 
 	public function getTitle(): string {
-		return $this->l10n->t('Agent commands');
+		// Include the slash targets so the composer's provider search matches
+		// partial command typing such as "/emb" against this entry's title.
+		$agentIds = $this->targetRegistry->registeredAgentIds();
+		if ($agentIds === []) {
+			return $this->l10n->t('Agent commands');
+		}
+
+		$targets = implode(', ', array_map(static fn (string $id): string => '/' . $id, $agentIds));
+		return $this->l10n->t('Agent commands') . ' (' . $targets . ')';
 	}
 
 	public function getOrder(): int {

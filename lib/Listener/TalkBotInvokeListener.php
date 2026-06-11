@@ -5,13 +5,14 @@ declare(strict_types=1);
 namespace OCA\AgentCommands\Listener;
 
 use OCA\AgentCommands\AppInfo\Application;
+use OCA\AgentCommands\Service\RoomBotLookup;
+use OCA\AgentCommands\Service\TargetRegistry;
 use OCA\Talk\Events\BotInvokeEvent;
 use OCP\EventDispatcher\Event;
 use OCP\EventDispatcher\IEventListener;
 use OCP\Http\Client\IClientService;
 use OCP\ICertificateManager;
 use OCP\IConfig;
-use OCP\IDBConnection;
 use OCP\Security\ISecureRandom;
 use Psr\Log\LoggerInterface;
 
@@ -19,16 +20,15 @@ use Psr\Log\LoggerInterface;
  * @template-implements IEventListener<Event>
  */
 class TalkBotInvokeListener implements IEventListener {
-	private const BOT_STATE_ENABLED = 1;
-	private const BOT_FEATURE_WEBHOOK = 1;
 	private const APP_BOT_URL = 'nextcloudapp://' . Application::APP_ID;
 
 	public function __construct(
-		private IDBConnection $db,
 		private IClientService $clientService,
 		private IConfig $config,
 		private ICertificateManager $certificateManager,
 		private ISecureRandom $secureRandom,
+		private TargetRegistry $targetRegistry,
+		private RoomBotLookup $roomBotLookup,
 		private LoggerInterface $logger,
 	) {
 	}
@@ -54,7 +54,12 @@ class TalkBotInvokeListener implements IEventListener {
 		}
 
 		$rawMessage = trim((string)($content['message'] ?? ''));
-		if ($rawMessage === '' || !preg_match('/^\/(?P<target>agent|nymble|aurel)(?:@[^\s]+)?(?:\s+[\s\S]*)?$/i', $rawMessage, $matches)) {
+		if ($rawMessage === '' || $rawMessage[0] !== '/') {
+			return;
+		}
+
+		$pattern = $this->targetRegistry->messagePattern();
+		if ($pattern === null || !preg_match($pattern, $rawMessage, $matches)) {
 			return;
 		}
 
@@ -64,66 +69,19 @@ class TalkBotInvokeListener implements IEventListener {
 		}
 
 		$target = strtolower($matches['target']);
-		$this->logger->warning('Agent Commands event bot bridge matched Talk command', [
-			'app' => Application::APP_ID,
-			'target' => $target,
-			'roomToken' => $roomToken,
-		]);
-
-		$bot = $this->findWebhookBotForTarget($roomToken, $target);
+		$resolvedTarget = $this->targetRegistry->resolveAlias($target);
+		$bot = $this->roomBotLookup->findBotForTarget($roomToken, $resolvedTarget);
 		if ($bot === null) {
-			$this->logger->warning('Agent Commands event bot bridge found no matching webhook bot', [
+			$this->logger->debug('Agent Commands event bot bridge found no matching webhook bot', [
 				'app' => Application::APP_ID,
 				'target' => $target,
+				'resolvedTarget' => $resolvedTarget,
 				'roomToken' => $roomToken,
 			]);
 			return;
 		}
 
 		$this->sendWebhook($bot['name'], $bot['url'], $bot['secret'], json_encode($body, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES));
-	}
-
-	/**
-	 * @return null|array{name: string, url: string, secret: string}
-	 */
-	private function findWebhookBotForTarget(string $roomToken, string $target): ?array {
-		$query = $this->db->getQueryBuilder();
-		$query->select('s.name', 's.url', 's.secret', 's.features')
-			->from('talk_bots_server', 's')
-			->innerJoin('s', 'talk_bots_conversation', 'c', $query->expr()->eq('s.id', 'c.bot_id'))
-			->where($query->expr()->eq('c.token', $query->createNamedParameter($roomToken)))
-			->andWhere($query->expr()->neq('s.state', $query->createNamedParameter(self::BOT_STATE_ENABLED - 1)))
-			->andWhere($query->expr()->neq('c.state', $query->createNamedParameter(self::BOT_STATE_ENABLED - 1)));
-
-		$result = $query->executeQuery();
-		while ($row = $result->fetch()) {
-			$name = (string)($row['name'] ?? '');
-			$url = (string)($row['url'] ?? '');
-			$secret = (string)($row['secret'] ?? '');
-			$features = (int)($row['features'] ?? 0);
-			if ($url === '' || $secret === '' || str_starts_with($url, 'nextcloudapp://') || ($features & self::BOT_FEATURE_WEBHOOK) === 0) {
-				continue;
-			}
-			if ($this->botMatchesTarget($name, $target)) {
-				return [
-					'name' => $name,
-					'url' => $url,
-					'secret' => $secret,
-				];
-			}
-		}
-
-		return null;
-	}
-
-	private function botMatchesTarget(string $name, string $target): bool {
-		$normalized = strtolower(trim($name));
-		$firstWord = strtok($normalized, " \t\r\n") ?: '';
-		if ($target === 'agent') {
-			return $normalized === 'nymble' || $firstWord === 'nymble';
-		}
-
-		return $normalized === $target || $firstWord === $target;
 	}
 
 	private function sendWebhook(string $botName, string $botUrl, string $botSecret, string $body): void {
@@ -149,7 +107,7 @@ class TalkBotInvokeListener implements IEventListener {
 		]);
 
 		$promise->then(function () use ($botName): void {
-			$this->logger->warning('Agent Commands event bot bridge invoked Talk bot webhook', [
+			$this->logger->debug('Agent Commands event bot bridge invoked Talk bot webhook', [
 				'app' => Application::APP_ID,
 				'botName' => $botName,
 			]);

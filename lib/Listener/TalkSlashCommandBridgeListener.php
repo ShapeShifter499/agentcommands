@@ -5,12 +5,13 @@ declare(strict_types=1);
 namespace OCA\AgentCommands\Listener;
 
 use OCA\AgentCommands\AppInfo\Application;
+use OCA\AgentCommands\Service\RoomBotLookup;
+use OCA\AgentCommands\Service\TargetRegistry;
 use OCP\EventDispatcher\Event;
 use OCP\EventDispatcher\IEventListener;
 use OCP\Http\Client\IClientService;
 use OCP\ICertificateManager;
 use OCP\IConfig;
-use OCP\IDBConnection;
 use OCP\Security\ISecureRandom;
 use Psr\Log\LoggerInterface;
 
@@ -18,18 +19,17 @@ use Psr\Log\LoggerInterface;
  * @template-implements IEventListener<Event>
  */
 class TalkSlashCommandBridgeListener implements IEventListener {
-	private const BOT_STATE_ENABLED = 1;
-	private const BOT_FEATURE_WEBHOOK = 1;
 	private const DEDUPE_TTL_SECONDS = 300;
 	private const DEDUPE_CONFIG_KEY = 'talk_slash_bridge_recent';
 	private const PARSE_EVENT_MAX_AGE_SECONDS = 90;
 
 	public function __construct(
-		private IDBConnection $db,
 		private IClientService $clientService,
 		private IConfig $config,
 		private ICertificateManager $certificateManager,
 		private ISecureRandom $secureRandom,
+		private TargetRegistry $targetRegistry,
+		private RoomBotLookup $roomBotLookup,
 		private LoggerInterface $logger,
 	) {
 	}
@@ -53,7 +53,8 @@ class TalkSlashCommandBridgeListener implements IEventListener {
 
 		$comment = $event->getComment();
 		$rawMessage = trim($comment->getMessage());
-		if ($rawMessage === '' || !preg_match('/^\/(?P<target>agent|nymble|aurel)(?:@[^\s]+)?(?:\s+[\s\S]*)?$/i', $rawMessage, $matches)) {
+		$target = $this->matchTarget($rawMessage);
+		if ($target === null) {
 			return;
 		}
 
@@ -68,7 +69,6 @@ class TalkSlashCommandBridgeListener implements IEventListener {
 			return;
 		}
 
-		$target = strtolower($matches['target']);
 		$room = $event->getRoom();
 		$this->processCommand(
 			$room->getToken(),
@@ -97,7 +97,8 @@ class TalkSlashCommandBridgeListener implements IEventListener {
 		}
 
 		$rawMessage = trim($message->getMessageRaw() ?: $message->getMessage() ?: $comment->getMessage());
-		if ($rawMessage === '' || !preg_match('/^\/(?P<target>agent|nymble|aurel)(?:@[^\s]+)?(?:\s+[\s\S]*)?$/i', $rawMessage, $matches)) {
+		$target = $this->matchTarget($rawMessage);
+		if ($target === null) {
 			return;
 		}
 
@@ -118,7 +119,7 @@ class TalkSlashCommandBridgeListener implements IEventListener {
 			$room->getToken(),
 			$room->getName(),
 			$rawMessage,
-			strtolower($matches['target']),
+			$target,
 			$actorType,
 			$message->getActorId(),
 			$message->getActorDisplayName(),
@@ -126,6 +127,24 @@ class TalkSlashCommandBridgeListener implements IEventListener {
 			(string)$comment->getId(),
 			'talk-message-parse',
 		);
+	}
+
+	/**
+	 * Matches the message against the targets currently known from registered
+	 * manifests. Returns the lowercase target token, or null when the message
+	 * is not an agent command.
+	 */
+	private function matchTarget(string $rawMessage): ?string {
+		if ($rawMessage === '' || $rawMessage[0] !== '/') {
+			return null;
+		}
+
+		$pattern = $this->targetRegistry->messagePattern();
+		if ($pattern === null || !preg_match($pattern, $rawMessage, $matches)) {
+			return null;
+		}
+
+		return strtolower($matches['target']);
 	}
 
 	private function processCommand(
@@ -141,7 +160,7 @@ class TalkSlashCommandBridgeListener implements IEventListener {
 		string $eventSource,
 	): void {
 		if ($this->shouldSkipRecentDuplicate($roomToken, $actorType, $actorId, $rawMessage, $messageId)) {
-			$this->logger->warning('Agent Commands slash bridge skipped duplicate Talk command event', [
+			$this->logger->debug('Agent Commands slash bridge skipped duplicate Talk command event', [
 				'app' => Application::APP_ID,
 				'target' => $target,
 				'roomToken' => $roomToken,
@@ -151,19 +170,13 @@ class TalkSlashCommandBridgeListener implements IEventListener {
 			return;
 		}
 
-		$this->logger->warning('Agent Commands slash bridge matched Talk command', [
-			'app' => Application::APP_ID,
-			'target' => $target,
-			'roomToken' => $roomToken,
-			'messageId' => $messageId,
-			'eventSource' => $eventSource,
-		]);
-
-		$bot = $this->findBotForTarget($roomToken, $target);
+		$resolvedTarget = $this->targetRegistry->resolveAlias($target);
+		$bot = $this->roomBotLookup->findBotForTarget($roomToken, $resolvedTarget);
 		if ($bot === null) {
-			$this->logger->warning('Agent Commands slash bridge found no matching Talk bot', [
+			$this->logger->debug('Agent Commands slash bridge found no matching Talk bot', [
 				'app' => Application::APP_ID,
 				'target' => $target,
+				'resolvedTarget' => $resolvedTarget,
 				'roomToken' => $roomToken,
 				'eventSource' => $eventSource,
 			]);
@@ -198,49 +211,6 @@ class TalkSlashCommandBridgeListener implements IEventListener {
 		], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
 
 		$this->sendWebhook($bot['name'], $bot['url'], $bot['secret'], $body);
-	}
-
-	/**
-	 * @return null|array{name: string, url: string, secret: string}
-	 */
-	private function findBotForTarget(string $roomToken, string $target): ?array {
-		$query = $this->db->getQueryBuilder();
-		$query->select('s.name', 's.url', 's.secret', 's.features')
-			->from('talk_bots_server', 's')
-			->innerJoin('s', 'talk_bots_conversation', 'c', $query->expr()->eq('s.id', 'c.bot_id'))
-			->where($query->expr()->eq('c.token', $query->createNamedParameter($roomToken)))
-			->andWhere($query->expr()->neq('s.state', $query->createNamedParameter(self::BOT_STATE_ENABLED - 1)))
-			->andWhere($query->expr()->neq('c.state', $query->createNamedParameter(self::BOT_STATE_ENABLED - 1)));
-
-		$result = $query->executeQuery();
-		while ($row = $result->fetch()) {
-			$name = (string)($row['name'] ?? '');
-			$url = (string)($row['url'] ?? '');
-			$secret = (string)($row['secret'] ?? '');
-			$features = (int)($row['features'] ?? 0);
-			if ($url === '' || $secret === '' || ($features & self::BOT_FEATURE_WEBHOOK) === 0) {
-				continue;
-			}
-			if ($this->botMatchesTarget($name, $target)) {
-				return [
-					'name' => $name,
-					'url' => $url,
-					'secret' => $secret,
-				];
-			}
-		}
-
-		return null;
-	}
-
-	private function botMatchesTarget(string $name, string $target): bool {
-		$normalized = strtolower(trim($name));
-		$firstWord = strtok($normalized, " \t\r\n") ?: '';
-		if ($target === 'agent') {
-			return $normalized === 'nymble' || $firstWord === 'nymble';
-		}
-
-		return $normalized === $target || $firstWord === $target;
 	}
 
 	private function shouldSkipRecentDuplicate(string $roomToken, string $actorType, string $actorId, string $rawMessage, string $messageId): bool {
@@ -294,16 +264,9 @@ class TalkSlashCommandBridgeListener implements IEventListener {
 			'body' => $body,
 		];
 
-		$this->logger->warning('Agent Commands slash bridge posting Talk bot webhook', [
-			'app' => Application::APP_ID,
-			'botName' => $botName,
-			'headerStyle' => 'X-Nextcloud-Talk',
-			'payload' => $body,
-		]);
-
 		try {
 			$response = $client->post($botUrl, $options);
-			$this->logger->warning('Agent Commands slash bridge invoked Talk bot webhook', [
+			$this->logger->debug('Agent Commands slash bridge invoked Talk bot webhook', [
 				'app' => Application::APP_ID,
 				'botName' => $botName,
 				'statusCode' => $response->getStatusCode(),
