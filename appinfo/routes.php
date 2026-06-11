@@ -19,5 +19,20 @@ return [
 			'url' => '/api/agents/{agentId}',
 			'verb' => 'DELETE',
 		],
+		[
+			'name' => 'personalSettings#setDefaultAgent',
+			'url' => '/api/personal/default-agent',
+			'verb' => 'PUT',
+		],
+		[
+			'name' => 'adminSettings#setDefaultAgent',
+			'url' => '/api/admin/default-agent',
+			'verb' => 'PUT',
+		],
+		[
+			'name' => 'adminSettings#setGroupDefault',
+			'url' => '/api/admin/group-default',
+			'verb' => 'PUT',
+		],
 	],
 ];

@@ -170,7 +170,10 @@ class TalkSlashCommandBridgeListener implements IEventListener {
 			return;
 		}
 
-		$resolvedTarget = $this->targetRegistry->resolveAlias($target);
+		$resolvedTarget = $this->targetRegistry->resolveAlias(
+			$target,
+			$actorType === 'users' ? $actorId : null,
+		);
 		$bot = $this->roomBotLookup->findBotForTarget($roomToken, $resolvedTarget);
 		if ($bot === null) {
 			$this->logger->debug('Agent Commands slash bridge found no matching Talk bot', [
