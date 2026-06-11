@@ -1,0 +1,45 @@
+<?php
+
+declare(strict_types=1);
+
+namespace OCA\AgentCommands\Settings;
+
+use OCA\AgentCommands\AppInfo\Application;
+use OCA\AgentCommands\Service\TargetRegistry;
+use OCP\AppFramework\Http\TemplateResponse;
+use OCP\IConfig;
+use OCP\IUserSession;
+use OCP\Settings\ISettings;
+
+class Personal implements ISettings {
+	public function __construct(
+		private IConfig $config,
+		private IUserSession $userSession,
+		private TargetRegistry $targetRegistry,
+	) {
+	}
+
+	public function getForm(): TemplateResponse {
+		$user = $this->userSession->getUser();
+		$current = $user === null ? '' : $this->config->getUserValue(
+			$user->getUID(),
+			Application::APP_ID,
+			'default_agent_target',
+			'',
+		);
+
+		return new TemplateResponse(Application::APP_ID, 'personal', [
+			'agents' => $this->targetRegistry->registeredAgentIds(),
+			'current' => $current,
+			'serverDefault' => $this->targetRegistry->resolveAlias('agent'),
+		]);
+	}
+
+	public function getSection(): string {
+		return 'additional';
+	}
+
+	public function getPriority(): int {
+		return 80;
+	}
+}

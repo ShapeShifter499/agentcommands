@@ -57,12 +57,25 @@ class TargetRegistry {
 	}
 
 	/**
-	 * Resolves the generic "agent" alias to the configured default agent.
+	 * Resolves the generic "agent" alias to the sender's preferred agent
+	 * (personal setting) when set, otherwise to the server-wide default.
 	 */
-	public function resolveAlias(string $target): string {
+	public function resolveAlias(string $target, ?string $userId = null): string {
 		$target = strtolower($target);
 		if ($target !== self::GENERIC_TARGET) {
 			return $target;
+		}
+
+		if ($userId !== null && $userId !== '') {
+			$personal = strtolower(trim($this->config->getUserValue(
+				$userId,
+				Application::APP_ID,
+				self::DEFAULT_AGENT_CONFIG_KEY,
+				'',
+			)));
+			if ($personal !== '' && in_array($personal, $this->registeredAgentIds(), true)) {
+				return $personal;
+			}
 		}
 
 		return $this->defaultAgentTarget();

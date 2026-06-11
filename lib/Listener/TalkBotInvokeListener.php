@@ -69,7 +69,12 @@ class TalkBotInvokeListener implements IEventListener {
 		}
 
 		$target = strtolower($matches['target']);
-		$resolvedTarget = $this->targetRegistry->resolveAlias($target);
+		$actorRef = (string)(($body['actor'] ?? [])['id'] ?? '');
+		[$actorType, $actorId] = array_pad(explode('/', $actorRef, 2), 2, '');
+		$resolvedTarget = $this->targetRegistry->resolveAlias(
+			$target,
+			$actorType === 'users' ? $actorId : null,
+		);
 		$bot = $this->roomBotLookup->findBotForTarget($roomToken, $resolvedTarget);
 		if ($bot === null) {
 			$this->logger->debug('Agent Commands event bot bridge found no matching webhook bot', [
